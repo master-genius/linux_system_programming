@@ -62,9 +62,19 @@ struct path_list {
 //this struct is cache the file for sort
 struct file_list {
     char name[MAX_NAME_LEN];
-    unsigned int height;
+    unsigned int count;
     struct file_list * next;
 };
+static int _file_count = 0;
+
+struct file_buf {
+    char name[MAX_NAME_LEN];
+    struct stat st;
+};
+
+#define BUFF_LEN    256
+//file list buffer
+struct file_buf _files_buf[BUFF_LEN];
 
 struct statis {
     unsigned long long dir_count;
@@ -84,6 +94,8 @@ void out_info(char* name, char* path, struct stat* st);
 
 void out_statis(struct statis* stats);
 
+void out_control(char * name, char* path, struct stat * st);
+
 void destroy_path_list(struct path_list* pl);
 
 void destroy_file_list(struct file_list * fl);
@@ -102,11 +114,6 @@ void help(void)
 
 int main(int argc, char *argv[])
 {
-    if (argc<2) {
-        help();
-        return 0;
-    }
-
     struct path_list pl;
     pl.next = NULL;
 
@@ -114,16 +121,43 @@ int main(int argc, char *argv[])
 
     bzero(&stats, sizeof(stats));
 
+    int recur_deep = 1;
     for(int i=1;i<argc;i++) {
-        if (access(argv[i], F_OK)==0)
+        if (strcmp(argv[i],"-s")==0)
+            _args[ARGS_SIZE] = 1;
+        else if (strcmp(argv[i],"-r")==0)
+            _args[ARGS_RECUR] = 1;
+        else if (strcmp(argv[i],"-a")==0)
+            _args[ARGS_LSALL] = 1;
+        else if (strncmp(argv[i],"--deep=",7)==0) {
+            recur_deep = atoi(argv[i]+7);
+            recur_deep = (recur_deep<=0)?1:recur_deep;
+        }
+        else if (strcmp(argv[i],"--lnk")==0)
+            _args[ARGS_LINK] = 1;
+        else if (strcmp(argv[i],"--path")==0)
+            _args[ARGS_PATH] = 1;
+        else if (strcmp(argv[i],"-t")==0)
+            _args[ARGS_STATIS] = 1;
+        else if (strcmp(argv[i],"-m")==0)
+            _args[ARGS_MODE] = 1;
+        else if (strcmp(argv[i], "-h")==0) {
+            help();
+            return 0;
+        }
+        else if (access(argv[i], F_OK)==0)
             init_path_list(argv[i], &pl);
+        else
+            dprintf(2, "Error:unknow arguments -> %s\n", argv[i]);
     }
+    if (pl.next==NULL)
+        init_path_list(".",&pl);
 
-    recur_dir(pl.next, 1, &stats);
-
-    out_statis(&stats);
-
+    recur_dir(pl.next, recur_deep, &stats);
+    if (_args[ARGS_STATIS])
+        out_statis(&stats);
     destroy_path_list(pl.next);
+
     return 0;
 }
 
@@ -176,9 +210,12 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
             if (strlen(rd->d_name)+strlen(nbuf)>MAX_NAME_LEN) {
                 break;
             }
-            if (strcmp("..", rd->d_name)==0 || strcmp(".", rd->d_name)==0)
-                continue;
-            if (rd->d_name[0] == '.')continue;
+            if (_args[ARGS_LSALL]==0) {
+                if (strcmp("..", rd->d_name)==0 || strcmp(".", rd->d_name)==0)
+                    continue;
+                else if (rd->d_name[0]=='.')
+                    continue;
+            }
 
             strcat(nbuf, rd->d_name);
             if (lstat(nbuf, &sttmp)==-1)
@@ -212,15 +249,38 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
                     stats->sock_count++;
 
             }
-            printf("%s\n", rd->d_name);
+            //printf("%s\n", rd->d_name);
+            //out_info(rd->d_name, cur->path, &sttmp);
+            out_control(rd->d_name, cur->path, &sttmp);
         }
         closedir(d);
         cur = cur->next;
     } 
 }
 
-void out_info(char * name, char * path, struct stat * st) {
+void out_control(char * name, char* path, struct stat * st) {
+    if(_args[ARGS_SORT]) {
 
+    } else {
+        out_info(name, path, st);
+    }
+}
+
+void out_info(char * name, char * path, struct stat * st) {
+    if (_args[ARGS_PATH])
+        printf("%s/",path);
+    printf("%s", name);
+    if (_args[ARGS_SIZE]) {
+        if (st->st_size <= 1024)
+            printf(" %dB",st->st_size);
+        else if (st->st_size > 1024 && st->st_size < 1048576)
+            printf(" %.2lfK", (double)st->st_size/1024);
+        else
+            printf(" %.2lfM",(double)st->st_size/1048576);
+    }
+    if(_args[ARGS_MODE])
+        printf(" %o", st->st_mode);
+    printf("\n");
 }
 
 void out_statis(struct statis * stats) {
@@ -246,7 +306,13 @@ void out_statis(struct statis * stats) {
     }
 
     printf("total count : %ld\n", stats->total_count);
-    printf("total size : %ld\n", stats->total_size);
+    printf("total size : ");
+    if (stats->total_size <= 1024)
+        printf(" %dB\n",stats->total_size);
+    else if (stats->total_size > 1024 && stats->total_size < 1048576)
+        printf(" %.2lfK\n", (double)stats->total_size/1024);
+    else
+        printf(" %.2lfM\n",(double)stats->total_size/1048576);
 
 }
 
@@ -264,4 +330,3 @@ void destroy_path_list(struct path_list * pl) {
         pl = ptmp;
     }
 }
-
