@@ -71,7 +71,6 @@ struct file_buf {
     struct stat st;
 };
 
-char _path_buffer[MAX_NAME_LEN] = {'\0'};
 
 #define BUFF_LEN    512
 
@@ -135,7 +134,7 @@ int init_path_list(char * path, struct path_list* pl);
 
 int recur_dir(struct path_list* pl, int max_height, struct statis* stats);
 
-void out_info(char* name, char* path, struct stat* st);
+void out_info(char* name, char* path, struct stat* st, int name_max_len);
 
 void out_statis(struct statis* stats);
 
@@ -175,6 +174,8 @@ int main(int argc, char *argv[])
 
     bzero(&stats, sizeof(stats));
 
+    char _path_buffer[MAX_NAME_LEN] = {'\0'};
+    
     int recur_deep = 1;
     int len_buf = 0;
     for(int i=1;i<argc;i++) {
@@ -249,7 +250,7 @@ int main(int argc, char *argv[])
         else if (access(argv[i], F_OK)==0) {
             len_buf = strlen(argv[i]);
             if (len_buf > 1 && argv[i][len_buf-1]=='/') {
-                strncmp(_path_buffer, argv[i], len_buf-1);
+                strncpy(_path_buffer, argv[i], len_buf-1);
                 init_path_list(_path_buffer, &pl);
             } else {
                 init_path_list(argv[i], &pl);
@@ -325,7 +326,7 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
                 perror("lstat");
             } else {
                 start_statis(sttmp, stats);
-                out_info(cur->path, NULL, &sttmp);
+                out_info(cur->path, NULL, &sttmp, strlen(cur->path));
             }
             goto out_next;
         }
@@ -461,7 +462,7 @@ int out_control(int count, int name_max_len) {
 
     qsortfbuf(fbufs,0,total-1);
     for (i=0;i<total;i++)
-        out_info(fbufs[i]->name, fbufs[i]->path, &fbufs[i]->st);
+        out_info(fbufs[i]->name, fbufs[i]->path, &fbufs[i]->st, name_max_len);
 
     if (_args[ARGS_PATH]==0)printf("\n");
 
@@ -471,7 +472,7 @@ int out_control(int count, int name_max_len) {
     return 0;
 }
 
-void out_info(char * name, char * path, struct stat * st) {
+void out_info(char * name, char * path, struct stat * st, int name_max_len) {
     if (_args[ARGS_INO])
         printf("%-9d ", st->st_ino);
     
@@ -508,6 +509,10 @@ void out_info(char * name, char * path, struct stat * st) {
         if (flag > 0)
             printf("%c",flag);
     }
+    int i = strlen(name);
+    if (flag > 0)i++;
+    for (;i<name_max_len;i++)
+        printf(" ");
 
     if (_args[ARGS_SIZE]) {
         if (st->st_size <= 1024)
