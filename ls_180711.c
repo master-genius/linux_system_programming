@@ -551,12 +551,6 @@ int out_control(char *path, struct format_info fi) {
 }
 
 void out_info(struct file_buf * fb, struct format_info fi) {
-    char align_space[MAX_NAME_LEN];
-    for(int i=0;i<MAX_NAME_LEN;i++)align_space[i] = ' ';
-    align_space[MAX_NAME_LEN-1] = '\0';
-
-    int align_i = 0;
-
     if (_args[ARGS_REGEX] && S_ISDIR(fb->st.st_mode))
         return ;
 
@@ -567,15 +561,15 @@ void out_info(struct file_buf * fb, struct format_info fi) {
         printf("%o ", fb->st.st_mode & 0777);
     
     if (_args[ARGS_LONGINFO]) {
-        align_i = fi.uname_max_len - strlen(fb->uname) + 1;
-        align_space[align_i] = '\0';
-        printf("%s%s",fb->uname,align_space);
+        printf("%s",fb->uname);
+        for(int i=strlen(fb->uname); i<fi.uname_max_len; i++)
+            printf(" ");
         
-        align_space[align_i] = ' ';
-        align_i = fi.group_max_len - strlen(fb->group) + 1;
-        align_space[align_i] = '\0';
-        printf(" %s%s",fb->group, align_space);
-        align_space[align_i] = ' ';
+        printf(":%s",fb->group);
+        for(int i=strlen(fb->group); i<fi.group_max_len; i++)
+            printf(" ");
+
+        printf(" ");
     }
     
     if ((_args[ARGS_PATH] || _args[ARGS_REGEX]) && strlen(fb->path)>0)
@@ -613,20 +607,10 @@ void out_info(struct file_buf * fb, struct format_info fi) {
         if (flag > 0)
             printf("%c",flag);
     }
-
-    align_i = fi.name_max_len - strlen(fb->name) + 1;
-    align_space[align_i] = '\0';
-    printf("%s", align_space);
-
-    if (_args[ARGS_SIZE] || _args[ARGS_LONGINFO]) {
-        if (fb->st.st_size <= 1024)
-            printf(" %dB",fb->st.st_size);
-        else if (fb->st.st_size > 1024 && fb->st.st_size < 1048576)
-            printf(" %.2lfK", (double)fb->st.st_size/1024);
-        else
-            printf(" %.2lfM",(double)fb->st.st_size/1048576);
-    }
-    
+    int i = strlen(fb->name);
+    if (flag > 0)i++;
+    for (;i<fi.name_max_len;i++)
+        printf(" ");
     if (S_ISLNK(fb->st.st_mode) 
         && (_args[ARGS_LONGINFO] || _args[ARGS_LINK])
     ) {
@@ -638,6 +622,14 @@ void out_info(struct file_buf * fb, struct format_info fi) {
         }
     }
 
+    if (_args[ARGS_SIZE] || _args[ARGS_LONGINFO]) {
+        if (fb->st.st_size <= 1024)
+            printf(" %dB",fb->st.st_size);
+        else if (fb->st.st_size > 1024 && fb->st.st_size < 1048576)
+            printf(" %.2lfK", (double)fb->st.st_size/1024);
+        else
+            printf(" %.2lfM",(double)fb->st.st_size/1048576);
+    }
     printf("\n");
 }
 
