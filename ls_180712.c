@@ -383,6 +383,11 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
                 grp = getgrgid(sttmp.st_gid);
                 strcpy(one_buf.uname, pd->pw_name);
                 strcpy(one_buf.group, grp->gr_name);
+                
+                fi.uname_max_len = strlen(pd->pw_name);
+                fi.name_max_len = strlen(cur->path);
+                fi.group_max_len = strlen(grp->gr_name);
+
                 out_info(&one_buf, fi);
             }
             goto out_next;
