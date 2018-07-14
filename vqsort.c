@@ -39,22 +39,6 @@ int main(int argc, char *argv[])
     }
 
     int N = argc - 1;
-    /*
-    int * nms = (int*)malloc(sizeof(nms)*N);
-    if (nms == NULL) {
-        perror("malloc");
-        return -1;
-    }
-
-    for (int i=1;i<argc;i++) {
-        nms[i-1] = atoi(argv[i]);
-    }
-
-    vqsort(nms, sizeof(int)*N, sizeof(int), int_comp);
-
-    for(int i=0; i<N; i++)
-        printf("%d ", nms[i]);
-*/
     char ** qs = (char**)malloc(sizeof(char *) * N);
     if (qs == NULL) {
         perror("malloc");
