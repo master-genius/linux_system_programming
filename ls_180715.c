@@ -174,7 +174,7 @@ void reset_file_buf_list();
 
 void destroy_file_list(struct file_buf_list * fl);
 
-void format_size(unsigned int size, char * fstr);
+void format_size(unsigned long long size, char * fstr);
 
 void help(void)
 {
@@ -688,7 +688,7 @@ void out_info(struct file_buf * fb, struct format_info fi) {
 
     printf("\n");
 }
-void format_size(unsigned int size, char * fstr) {
+void format_size(unsigned long long size, char * fstr) {
     if (size <= 1024)
         sprintf(fstr, "%dB",size);
     else if (size > 1024 && size < 1048576)

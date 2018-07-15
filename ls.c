@@ -72,6 +72,7 @@ struct path_list {
     char path[MAX_NAME_LEN];
     int is_dir;
     int height;
+    int is_root;
     struct path_list * next;
 };
 
@@ -174,7 +175,7 @@ void reset_file_buf_list();
 
 void destroy_file_list(struct file_buf_list * fl);
 
-void format_size(unsigned int size, char * fstr);
+void format_size(unsigned long long size, char * fstr);
 
 void help(void)
 {
@@ -324,8 +325,11 @@ int main(int argc, char *argv[])
 
     if (pl.next==NULL)
         init_path_list(".",&pl);
-    
-    recur_dir(pl.next, recur_deep, &stats);
+   
+
+    if (recur_dir(pl.next, recur_deep, &stats)<0) {
+        dprintf(2,"Error: recur dir\n");
+    }
 
     if (_args[ARGS_STATIS])
         out_statis(&stats);
@@ -353,6 +357,9 @@ int init_path_list(char* path, struct path_list* pl) {
     } else {
         ptmp->is_dir = 0;
     }
+    if (strlen(path)==1 && path[0]=='/')
+        ptmp->is_root = 1;
+
     struct path_list * end_path = pl;
     while (end_path!=NULL && end_path->next!=NULL) {
         end_path = end_path->next;
@@ -426,7 +433,9 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
         int cur_count = 0;
         while((rd = readdir(d))!=NULL) {
             strcpy(nbuf, cur->path);
-            strcat(nbuf, "/");
+            if (!cur->is_root)
+                strcat(nbuf, "/");
+
             if (strlen(rd->d_name)+strlen(nbuf)>MAX_NAME_LEN) {
                 continue;
             }
@@ -439,8 +448,10 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
             }
 
             strcat(nbuf, rd->d_name);
-            if (lstat(nbuf, &sttmp)==-1)
-                return -1;
+            if (lstat(nbuf, &sttmp)==-1) {
+                perror("lstat");
+                continue;
+            }
             pd = getpwuid(sttmp.st_uid);
             grp = getgrgid(sttmp.st_gid);
 
@@ -449,9 +460,12 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
                 && strcmp(rd->d_name, ".")!=0
             ) {
                 path_tmp = (struct path_list*)malloc(sizeof(struct path_list));
-                if (path_tmp==NULL)
+                if (path_tmp==NULL) {
+                    perror("malloc");
                     return -1;
+                }
                 path_tmp->is_dir = 1;
+                path_tmp->is_root = 0;
                 path_tmp->next = NULL;
 
                 path_tmp->height = cur->height+1;
@@ -508,6 +522,7 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
         }
         if ((_args[ARGS_REGEX] && cur_count > 0) || _args[ARGS_REGEX]==0) {
             if (out_control(cur->path, fi) < 0) {
+                dprintf(2, "Error: out control failed\n");
                 return -1;
             }
         }
@@ -517,6 +532,8 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
       out_next:;
         cur = cur->next;
     } 
+
+    return 0;
 }
 
 void start_statis(struct stat sttmp, struct statis * stats) {
@@ -688,7 +705,7 @@ void out_info(struct file_buf * fb, struct format_info fi) {
 
     printf("\n");
 }
-void format_size(unsigned int size, char * fstr) {
+void format_size(unsigned long long size, char * fstr) {
     if (size <= 1024)
         sprintf(fstr, "%dB",size);
     else if (size > 1024 && size < 1048576)
@@ -721,7 +738,7 @@ void out_statis(struct statis * stats) {
             printf("%13s : %ld\n", count_name[i], count_ind[i]);
         i++;
     }
-    printf("%13s : %ld\n", "total count",stats->total_count);
+
     
     char size_str[64] = {'\0',};
     format_size(stats->total_size, size_str);
@@ -729,7 +746,11 @@ void out_statis(struct statis * stats) {
     format_size(stats->file_total_size, size_str+32);
     size_str[63] = '\0';
 
-    printf("%13s : %s\n%13s : %s\n", "total size",size_str,"total file size",size_str+32);
+    if (!_args[ARGS_REGEX]) {
+        printf("%13s : %ld\n", "total count",stats->total_count);
+        printf("%13s : %s\n", "total size",size_str);
+    }
+    printf("%13s : %s\n","total file size",size_str+32);
 }
 
 void destroy_file_list(struct file_buf_list * fl) {
