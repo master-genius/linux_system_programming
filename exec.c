@@ -3,12 +3,19 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+char *_path[] = {
+    "/bin",
+    "/sbin",
+    "/usr/bin",
+    "/usr/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin",
+    "\0"
+};
 
 int main(int argc, char * argv[])
 {
-    
-    char * path = getenv("PATH");
-    printf("%s\n",path);
+    char * path = getenv("HOME");
 
 
     return 0;

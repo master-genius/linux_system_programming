@@ -62,6 +62,10 @@
 
 #define MAX_NAME_LEN    2048
 
+#define STDOUT_SCRN     1
+#define STDOUT_FIPI     2
+
+
 char _args[ARGS_END] = {0};
 
 struct path_list {
@@ -121,6 +125,8 @@ struct format_info {
 
 regex_t _regcom[1];
 regmatch_t _regmatch[1];
+
+int _standard_out = STDOUT_SCRN;
 
 #define SWAP(a,b)   tmp=a;a=b;b=tmp;
 
@@ -302,6 +308,15 @@ int main(int argc, char *argv[])
         else
             dprintf(2, "Error:unknow arguments -> %s\n", argv[i]);
     }
+
+    struct stat dst;
+    if (fstat(1, &dst)<0) {
+        perror("fstat");
+        return 1;
+    }
+    if (S_ISFIFO(dst.st_mode))
+        _standard_out = STDOUT_FIPI;
+
     if (pl.next==NULL)
         init_path_list(".",&pl);
     
@@ -577,13 +592,13 @@ void out_info(struct file_buf * fb, struct format_info fi) {
         return ;
 
     if (_args[ARGS_INO])
-        printf("%-9d ", fb->st.st_ino);
+        printf("%-8d ", fb->st.st_ino);
     
     if(_args[ARGS_MODE] || _args[ARGS_LONGINFO])
         printf("%o ", fb->st.st_mode & 0777);
     
     if (_args[ARGS_LONGINFO]) {
-        printf("%d ", fb->st.st_nlink);
+        printf("%-2d ", fb->st.st_nlink);
 
         align_i = fi.uname_max_len - strlen(fb->uname) + 1;
         align_space[align_i] = '\0';
@@ -607,7 +622,7 @@ void out_info(struct file_buf * fb, struct format_info fi) {
     if ((_args[ARGS_PATH] || _args[ARGS_REGEX]) && strlen(fb->path)>0)
         printf("%s",fb->path);
     else {
-        if (_args[ARGS_COLOR]) {
+        if (_args[ARGS_COLOR] && _standard_out==STDOUT_SCRN) {
             if (S_ISDIR(fb->st.st_mode))
                 printf("\e[1;34m%s",fb->name);
             else if(S_ISLNK(fb->st.st_mode))
