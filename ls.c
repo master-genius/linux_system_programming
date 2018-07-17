@@ -452,8 +452,6 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
                 perror("lstat");
                 continue;
             }
-            pd = getpwuid(sttmp.st_uid);
-            grp = getgrgid(sttmp.st_gid);
 
             if (S_ISDIR(sttmp.st_mode) 
                 && strcmp(rd->d_name, "..")!=0
@@ -504,21 +502,31 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
             memcpy(&fbtmp->st, &sttmp, sizeof(struct stat));
             strcpy(fbtmp->path, nbuf);
             strcpy(fbtmp->name, rd->d_name);
-            strcpy(fbtmp->uname, pd->pw_name);
-            strcpy(fbtmp->group, grp->gr_name);
-
-            fi.count++;
+            fbtmp->uname[0] = '\0';
+            fbtmp->group[0] = '\0';
             len_buf = strlen(rd->d_name);
             if (len_buf > fi.name_max_len)
                 fi.name_max_len = len_buf;
 
-            len_buf = strlen(pd->pw_name);
-            if (len_buf > fi.uname_max_len)
-                fi.uname_max_len = len_buf;
+            if (_args[ARGS_LONGINFO]) {
+                pd = getpwuid(sttmp.st_uid);
+                grp = getgrgid(sttmp.st_gid);
+                if (pd && grp) {
+                    strcpy(fbtmp->uname, pd->pw_name);
+                    strcpy(fbtmp->group, grp->gr_name);
+                    
+                    len_buf = strlen(pd->pw_name);
+                    if (len_buf > fi.uname_max_len)
+                        fi.uname_max_len = len_buf;
 
-            len_buf = strlen(grp->gr_name);
-            if (len_buf > fi.group_max_len)
-                fi.group_max_len = len_buf;
+                    len_buf = strlen(grp->gr_name);
+                    if (len_buf > fi.group_max_len)
+                        fi.group_max_len = len_buf;
+                }
+            }
+
+            //printf("%s  %s\n", rd->d_name, nbuf);
+            fi.count++;
         }
         if ((_args[ARGS_REGEX] && cur_count > 0) || _args[ARGS_REGEX]==0) {
             if (out_control(cur->path, fi) < 0) {
@@ -614,13 +622,13 @@ void out_info(struct file_buf * fb, struct format_info fi) {
         return ;
 
     if (_args[ARGS_INO])
-        printf("%-8d ", fb->st.st_ino);
+        printf("%-8lu ", fb->st.st_ino);
     
     if(_args[ARGS_MODE] || _args[ARGS_LONGINFO])
         printf("%o ", fb->st.st_mode & 0777);
     
     if (_args[ARGS_LONGINFO]) {
-        printf("%-2d ", fb->st.st_nlink);
+        printf("%-2lu ", fb->st.st_nlink);
 
         align_i = fi.uname_max_len - strlen(fb->uname) + 1;
         align_space[align_i] = '\0';
@@ -685,7 +693,7 @@ void out_info(struct file_buf * fb, struct format_info fi) {
 
     if (_args[ARGS_SIZE] || _args[ARGS_LONGINFO]) {
         if (fb->st.st_size <= 1024)
-            printf(" %dB",fb->st.st_size);
+            printf(" %luB",fb->st.st_size);
         else if (fb->st.st_size > 1024 && fb->st.st_size < 1048576)
             printf(" %.2lfK", (double)fb->st.st_size/1024);
         else
@@ -707,7 +715,7 @@ void out_info(struct file_buf * fb, struct format_info fi) {
 }
 void format_size(unsigned long long size, char * fstr) {
     if (size <= 1024)
-        sprintf(fstr, "%dB",size);
+        sprintf(fstr, "%lluB",size);
     else if (size > 1024 && size < 1048576)
         sprintf(fstr, "%.2lfK", (double)size/1024);
     else
@@ -735,7 +743,7 @@ void out_statis(struct statis * stats) {
     int i=0;
     while (strcmp(count_name[i],"\0")!=0) {
         if (count_ind[i]>0)
-            printf("%13s : %ld\n", count_name[i], count_ind[i]);
+            printf("%13s : %llu\n", count_name[i], count_ind[i]);
         i++;
     }
 
@@ -747,7 +755,7 @@ void out_statis(struct statis * stats) {
     size_str[63] = '\0';
 
     if (!_args[ARGS_REGEX]) {
-        printf("%13s : %ld\n", "total count",stats->total_count);
+        printf("%13s : %llu\n", "total count",stats->total_count);
         printf("%13s : %s\n", "total size",size_str);
     }
     printf("%13s : %s\n","total file size",size_str+32);
