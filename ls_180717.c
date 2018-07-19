@@ -400,6 +400,7 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
 
     bzero(&fi, sizeof(fi));
 
+    int cur_count = 0;
     while (cur!=NULL) {
         if(max_height>0 && cur->height >= max_height)break;
         if (cur->is_dir==0) {
@@ -430,7 +431,6 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
             continue;
         }
         
-        int cur_count = 0;
         while((rd = readdir(d))!=NULL) {
             strcpy(nbuf, cur->path);
             if (!cur->is_root)

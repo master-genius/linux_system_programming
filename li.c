@@ -68,12 +68,21 @@
 
 char _args[ARGS_END] = {0};
 
-struct path_list {
+#define PATH_CELL_END   16
+
+struct path_cell {
     char path[MAX_NAME_LEN];
-    int is_dir;
-    int height;
-    int is_root;
+    char is_root;
+    int  plen;
+    int  height;
+};
+
+struct path_list {
+    struct path_cell pce[PATH_CELL_END];
+    int ind_end;
+
     struct path_list * next;
+    struct path_list * prev;
 };
 
 
@@ -157,17 +166,21 @@ void qsortfbuf(struct file_buf *d[], int start, int end) {
     qsortfbuf(d, i+1,end);
 }
 
-int init_path_list(char * path, struct path_list* pl);
+int init_path_list(char * path, struct path_list* pl, struct statis * stats);
 
 int recur_dir(struct path_list* pl, int max_height, struct statis* stats);
 
-void out_info(struct file_buf * fb, struct format_info fi);
+int handle_info_dir(struct path_list* cur, struct path_list *end, int cur_height, char* nbuf);
+
+int add_sort_list(char*nbuf, char*name, struct stat *sttmp, struct format_info *fi);
+
+void out_info(struct file_buf * fb, struct format_info *fi);
 
 void out_statis(struct statis* stats);
 
 void start_statis(struct stat sttmp, struct statis * stats);
 
-int out_control(char* path, struct format_info fi);
+int out_control(char* path, struct format_info * fi);
 
 void destroy_path_list(struct path_list* pl);
 
@@ -210,6 +223,8 @@ int main(int argc, char *argv[])
 
     struct path_list pl;
     pl.next = NULL;
+    pl.prev = NULL;
+    pl.ind_end = -1;
 
     struct statis stats;
 
@@ -306,9 +321,9 @@ int main(int argc, char *argv[])
             if (len_buf > 1 && argv[i][len_buf-1]=='/') {
                 strncpy(_path_buffer, argv[i], len_buf-1);
                 _path_buffer[len_buf-1] = '\0';
-                init_path_list(_path_buffer, &pl);
+                init_path_list(_path_buffer, &pl, &stats);
             } else {
-                init_path_list(argv[i], &pl);
+                init_path_list(argv[i], &pl, &stats);
             }
         }
         else
@@ -323,69 +338,215 @@ int main(int argc, char *argv[])
     if (S_ISFIFO(dst.st_mode))
         _standard_out = STDOUT_FIPI;
 
-    if (pl.next==NULL)
-        init_path_list(".",&pl);
-   
+    if (pl.ind_end < 0)
+        init_path_list(".",&pl, &stats);
 
-    if (recur_dir(pl.next, recur_deep, &stats)<0) {
+    if (recur_dir(&pl, recur_deep, &stats)<0) {
         dprintf(2,"Error: recur dir\n");
     }
 
     if (_args[ARGS_STATIS])
         out_statis(&stats);
     
-    /*
-    struct path_list *ptmp = pl.next;
+   /*
+    struct path_list*ptmp = &pl;
     while(ptmp!=NULL) {
-        printf("%s\n",ptmp->path);
+        for(int i=0;i<=ptmp->ind_end;i++)
+            printf("%s\n", ptmp->pce[i].path);
+
         ptmp = ptmp->next;
-    }*/
-        
+    }
+    */
     destroy_path_list(pl.next);
 
     return 0;
 }
 
-int init_path_list(char* path, struct path_list* pl) {
+
+int init_path_list(char* path, struct path_list* pl, struct statis * stats) {
     struct stat pst;
     if (lstat(path, &pst) < 0) {
         dprintf(2, "Error:init path list -> %s\n",path);
         perror("lstat");
         return -1;
     }
-    struct path_list * ptmp = NULL;
-    ptmp = (struct path_list*)malloc(sizeof(struct path_list));
-    if (ptmp == NULL) {
-        perror("malloc");
+
+    if (!S_ISDIR(pst.st_mode)) {
+        stats->total_count += 1;
+        stats->total_size += pst.st_size;
+        switch (pst.st_mode & S_IFMT) {
+            case S_IFBLK:
+                stats->blk_count += 1;
+                break;
+            case S_IFCHR:
+                stats->chr_count += 1;
+                break;
+            case S_IFLNK:
+                stats->link_count += 1;
+                break;
+            case S_IFSOCK:
+                stats->sock_count += 1;
+                break;
+            case S_IFIFO:
+                stats->fifo_count += 1;
+                break;
+            case S_IFREG:
+                stats->file_count += 1;
+                break;
+        }
+        return 0;
+    }
+
+    int plen = strlen(path);
+    if (plen >= MAX_NAME_LEN) {
+        dprintf(2,"Error: the length of path name out of the max limit:%d",MAX_NAME_LEN);
         return -1;
     }
-    if (S_ISDIR(pst.st_mode)) {
-        ptmp->is_dir = 1;
+
+    if (pl->ind_end < PATH_CELL_END-1) {
+        pl->ind_end++;
+        strcpy(pl->pce[pl->ind_end].path, path);
+        pl->pce[pl->ind_end].plen = plen;
+        if (plen==1 && path[0]=='/')
+            pl->pce[pl->ind_end].is_root = 1;
+
+        pl->pce[pl->ind_end].height = 0;
+
     } else {
-        ptmp->is_dir = 0;
+        struct path_list * ptmp = NULL;
+        ptmp = (struct path_list*)malloc(sizeof(struct path_list));
+        if (ptmp == NULL) {
+            perror("malloc");
+            return -1;
+        }
+        ptmp->ind_end = 0;
+        strcpy(ptmp->pce[ptmp->ind_end].path, path);
+
+        if (plen==1 && path[0]=='/')
+            ptmp->pce[ptmp->ind_end].is_root = 1;
+
+        ptmp->pce[ptmp->ind_end].height = 0;
+
+        struct path_list * end_path = pl;
+        while (end_path!=NULL && end_path->next!=NULL) {
+            end_path = end_path->next;
+        }
+
+        end_path->next = ptmp;
+        ptmp->prev = end_path;
+        ptmp->next = NULL;
+        end_path = ptmp;
     }
-    if (strlen(path)==1 && path[0]=='/')
-        ptmp->is_root = 1;
 
-    struct path_list * end_path = pl;
-    while (end_path!=NULL && end_path->next!=NULL) {
-        end_path = end_path->next;
+    return 0;
+}
+
+int handle_info_dir(struct path_list* cur, struct path_list *end_path, int cur_height, char* nbuf)
+{
+    struct path_list * path_tmp = NULL;
+
+    if (cur->ind_end < PATH_CELL_END-1) {
+        cur->ind_end += 1;
+        strcpy(cur->pce[cur->ind_end].path, nbuf);
+        cur->pce[cur->ind_end].height = cur_height+1;
+        cur->pce[cur->ind_end].is_root = 0;
+
+    }/*
+    else if (cur->prev != NULL) {
+        end_path->next = cur->prev;
+        end_path = cur->prev;
+
+        cur->prev = cur->prev->prev;
+        cur->prev->prev->next = cur;
+
+        end_path->next = NULL;
+        end_path->ind_end = 0;
+        strcpy(end_path->pce[end_path->ind_end].path, nbuf);
+        end_path->pce[end_path->ind_end].height = cur_height+1;
+        end_path->pce[0].is_root = 0;
+
+    }*/ 
+    else {
+        path_tmp = (struct path_list*)malloc(sizeof(struct path_list));
+        if (path_tmp==NULL) {
+            perror("malloc");
+            return -1;
+        }
+        path_tmp->next = NULL;
+        path_tmp->ind_end = 0;
+        path_tmp->prev = end_path;
+        end_path->next = path_tmp;
+        end_path = path_tmp;
+        path_tmp = NULL;
+        
+        end_path->pce[0].height = cur_height+1;
+        end_path->pce[0].is_root = 0;
+
+        strcpy(end_path->pce[0].path, nbuf);
     }
 
-    end_path->next = ptmp;
-    strcpy(ptmp->path, path);
-    ptmp->next = NULL;
-    end_path = ptmp;
-    ptmp = NULL;
+    return 0;
+}
 
+int add_sort_list(char *nbuf, char*name, struct stat * sttmp, struct format_info *fi) {
+    struct file_buf * fbtmp = NULL;
+    struct file_buf_list * fbuf_tmp = NULL;
+    struct passwd * pd; 
+    struct group * grp;
+    int len_buf = 0;
+
+    if (_file_cache.end_ind < BUFF_LEN) {
+        _file_cache.end_ind += 1;
+        fbtmp = &_file_cache.fcache[_file_cache.end_ind];
+    } else {
+        fbuf_tmp = (struct file_buf_list*)malloc(sizeof(struct file_buf_list));
+        if (fbuf_tmp == NULL) {
+            perror("malloc");
+            return -1;
+        }
+        fbuf_tmp->next = NULL;
+        fbuf_tmp->count = _fbuf_list_end->count + 1;
+        _fbuf_list_end->next = fbuf_tmp;
+        _fbuf_list_end = fbuf_tmp;
+        fbuf_tmp = NULL;
+        fbtmp = &_fbuf_list_end->fbuf;
+    }
+    
+    memcpy(&fbtmp->st, sttmp, sizeof(struct stat));
+    strcpy(fbtmp->path, nbuf);
+    strcpy(fbtmp->name, name);
+
+    fbtmp->uname[0] = '\0';
+    fbtmp->group[0] = '\0';
+    len_buf = strlen(name);
+    if (len_buf > fi->name_max_len)
+        fi->name_max_len = len_buf;
+
+    if (_args[ARGS_LONGINFO]) {
+        pd = getpwuid(sttmp->st_uid);
+        grp = getgrgid(sttmp->st_gid);
+        if (pd && grp) {
+            strcpy(fbtmp->uname, pd->pw_name);
+            strcpy(fbtmp->group, grp->gr_name);
+            
+            len_buf = strlen(pd->pw_name);
+            if (len_buf > fi->uname_max_len)
+                fi->uname_max_len = len_buf;
+
+            len_buf = strlen(grp->gr_name);
+            if (len_buf > fi->group_max_len)
+                fi->group_max_len = len_buf;
+        }
+    }
+
+    fi->count++;
     return 0;
 }
 
 int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
     struct path_list* cur = pl;
-    struct path_list * path_tmp = NULL;
     struct path_list * end_path = pl;
-    struct file_buf_list * fbuf_tmp = NULL;
+    struct path_list * path_tmp = NULL;
     
     while (end_path!=NULL && end_path->next!=NULL) {
         end_path = end_path->next;
@@ -399,155 +560,105 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
     int cur_name_max_len = 0;
     int len_buf = 0;
 
-    struct passwd * pd; 
-    struct group * grp;
     struct format_info fi;
-    struct file_buf * fbtmp = NULL;
     struct file_buf one_buf;
 
     bzero(&fi, sizeof(fi));
 
+    int i=0;
+    int cur_count = 0;
+    int cur_height = 0;
+
+    int name_len_tmp = 0;
     while (cur!=NULL) {
-        if(max_height>0 && cur->height >= max_height)break;
-        if (cur->is_dir==0) {
-            if (lstat(cur->path, &one_buf.st) < 0){
-                dprintf(2,"Error: %s\n",cur->path);
-                perror("lstat");
-            } else {
-                start_statis(one_buf.st, stats);
-                strcpy(one_buf.name, cur->path);
-                one_buf.path[0] = '\0';
-                pd = getpwuid(sttmp.st_uid);
-                grp = getgrgid(sttmp.st_gid);
-                strcpy(one_buf.uname, pd->pw_name);
-                strcpy(one_buf.group, grp->gr_name);
-                
-                fi.uname_max_len = strlen(pd->pw_name);
-                fi.name_max_len = strlen(cur->path);
-                fi.group_max_len = strlen(grp->gr_name);
 
-                out_info(&one_buf, fi);
-            }
-            goto out_next;
-        }
-        d = opendir(cur->path);
-        if (d==NULL) {
-            perror("opendir");
-            cur = cur->next;
-            continue;
-        }
-        
-        int cur_count = 0;
-        while((rd = readdir(d))!=NULL) {
-            strcpy(nbuf, cur->path);
-            if (!cur->is_root)
-                strcat(nbuf, "/");
-
-            if (strlen(rd->d_name)+strlen(nbuf)>MAX_NAME_LEN) {
+        for (i=0; i <= cur->ind_end; i++) {
+            if(max_height>0 && end_path->pce[end_path->ind_end].height >= max_height)
+                goto deep_end;
+            d = opendir(cur->pce[i].path);
+            if (d==NULL) {
+                perror("opendir");
                 continue;
-            }
-
-            if (_args[ARGS_LSALL]==0) {
-                if (strcmp("..", rd->d_name)==0 || strcmp(".", rd->d_name)==0)
-                    continue;
-                else if (rd->d_name[0]=='.')
-                    continue;
-            }
-
-            strcat(nbuf, rd->d_name);
-            if (lstat(nbuf, &sttmp)==-1) {
-                perror("lstat");
-                continue;
-            }
-
-            if (S_ISDIR(sttmp.st_mode) 
-                && strcmp(rd->d_name, "..")!=0
-                && strcmp(rd->d_name, ".")!=0
-            ) {
-                path_tmp = (struct path_list*)malloc(sizeof(struct path_list));
-                if (path_tmp==NULL) {
-                    perror("malloc");
-                    return -1;
-                }
-                path_tmp->is_dir = 1;
-                path_tmp->is_root = 0;
-                path_tmp->next = NULL;
-
-                path_tmp->height = cur->height+1;
-                strcpy(path_tmp->path, nbuf);
-                
-                end_path->next = path_tmp;
-                end_path = path_tmp;
-                path_tmp = NULL;
-            }
-
-            if (_args[ARGS_REGEX] && !S_ISDIR(sttmp.st_mode)) {
-                if (regexec(_regcom, rd->d_name, 1, _regmatch, 0)!=0)
-                    continue;
-                cur_count++;
-            }
-            if (_args[ARGS_STATIS] || _args[ARGS_SHOWSTATS])
-                start_statis(sttmp, stats);
-
-            if (_file_cache.end_ind < BUFF_LEN) {
-                _file_cache.end_ind += 1;
-                fbtmp = &_file_cache.fcache[_file_cache.end_ind];
-            } else {
-                fbuf_tmp = (struct file_buf_list*)malloc(sizeof(struct file_buf_list));
-                if (fbuf_tmp == NULL) {
-                    perror("malloc");
-                    return -1;
-                }
-                fbuf_tmp->next = NULL;
-                fbuf_tmp->count = _fbuf_list_end->count + 1;
-                _fbuf_list_end->next = fbuf_tmp;
-                _fbuf_list_end = fbuf_tmp;
-                fbuf_tmp = NULL;
-                fbtmp = &_fbuf_list_end->fbuf;
             }
             
-            memcpy(&fbtmp->st, &sttmp, sizeof(struct stat));
-            strcpy(fbtmp->path, nbuf);
-            strcpy(fbtmp->name, rd->d_name);
-            fbtmp->uname[0] = '\0';
-            fbtmp->group[0] = '\0';
-            len_buf = strlen(rd->d_name);
-            if (len_buf > fi.name_max_len)
-                fi.name_max_len = len_buf;
+            cur_height = cur->pce[i].height;
 
-            if (_args[ARGS_LONGINFO]) {
-                pd = getpwuid(sttmp.st_uid);
-                grp = getgrgid(sttmp.st_gid);
-                if (pd && grp) {
-                    strcpy(fbtmp->uname, pd->pw_name);
-                    strcpy(fbtmp->group, grp->gr_name);
-                    
-                    len_buf = strlen(pd->pw_name);
-                    if (len_buf > fi.uname_max_len)
-                        fi.uname_max_len = len_buf;
+            while((rd=readdir(d))!=NULL) {
+                strcpy(nbuf, cur->pce[i].path);
+                if (!cur->pce[i].is_root)
+                    strcat(nbuf, "/");
 
-                    len_buf = strlen(grp->gr_name);
-                    if (len_buf > fi.group_max_len)
-                        fi.group_max_len = len_buf;
+                if (strlen(rd->d_name) + strlen(cur->pce[i].path) >= MAX_NAME_LEN)
+                    continue;
+                if (_args[ARGS_LSALL]==0 && rd->d_name[0]=='.') {
+                    continue;
+                }
+                
+                strcat(nbuf, rd->d_name);
+                if (lstat(nbuf, &sttmp)==-1) {
+                    perror("lstat");
+                    continue;
+                }
+
+                if (S_ISDIR(sttmp.st_mode) 
+                    && strcmp(rd->d_name, "..")!=0
+                    && strcmp(rd->d_name, ".")!=0
+                ) {
+                    if (cur->ind_end < PATH_CELL_END-1) {
+                        cur->ind_end += 1;
+                        strcpy(cur->pce[cur->ind_end].path, nbuf);
+                        cur->pce[cur->ind_end].height = cur_height+1;
+                        cur->pce[cur->ind_end].is_root = 0;
+                    }
+                    else {
+                        path_tmp = (struct path_list*)malloc(sizeof(struct path_list));
+                        if (path_tmp==NULL) {
+                            perror("malloc");
+                            return -1;
+                        }
+                        path_tmp->next = NULL;
+                        path_tmp->ind_end = 0;
+                        path_tmp->prev = end_path;
+                        end_path->next = path_tmp;
+                        end_path = path_tmp;
+                        path_tmp = NULL;
+                        
+                        end_path->pce[0].height = cur_height+1;
+                        end_path->pce[0].is_root = 0;
+
+                        strcpy(end_path->pce[0].path, nbuf);
+                    }
+
+                    //if(handle_info_dir(cur, end_path, cur_height, nbuf))
+                      //  return -1;
+                }
+
+                if (_args[ARGS_STATIS] || _args[ARGS_SHOWSTATS])
+                    start_statis(sttmp, stats);
+
+                if (_args[ARGS_REGEX] && !S_ISDIR(sttmp.st_mode)) {
+                    if (regexec(_regcom, rd->d_name, 1, _regmatch, 0)!=0)
+                        continue;
+                    cur_count++;
+                }
+                //handle not dir
+                if(add_sort_list(nbuf, rd->d_name, &sttmp, &fi))
+                    return -1;
+            }
+            if ((_args[ARGS_REGEX] && cur_count > 0) || _args[ARGS_REGEX]==0) {
+                if (out_control(cur->pce[i].path, &fi) < 0) {
+                    dprintf(2, "Error: out control failed\n");
+                    return -1;
                 }
             }
-
-            //printf("%s  %s\n", rd->d_name, nbuf);
-            fi.count++;
-        }
-        if ((_args[ARGS_REGEX] && cur_count > 0) || _args[ARGS_REGEX]==0) {
-            if (out_control(cur->path, fi) < 0) {
-                dprintf(2, "Error: out control failed\n");
-                return -1;
-            }
-        }
-        cur_count = 0;
-        bzero(&fi, sizeof(fi));
-        closedir(d);
-      out_next:;
+            cur_count = 0;
+            bzero(&fi, sizeof(fi));
+            closedir(d);
+            
+        }//for end
         cur = cur->next;
     } 
-
+deep_end:;
     return 0;
 }
 
@@ -575,7 +686,7 @@ void start_statis(struct stat sttmp, struct statis * stats) {
 }
 
 
-int out_control(char *path, struct format_info fi) {
+int out_control(char *path, struct format_info * fi) {
     if (_args[ARGS_SHOWSTATS]) {
         return 0;
     }
@@ -618,7 +729,7 @@ int out_control(char *path, struct format_info fi) {
     return 0;
 }
 
-void out_info(struct file_buf * fb, struct format_info fi) {
+void out_info(struct file_buf * fb, struct format_info * fi) {
     char align_space[MAX_NAME_LEN];
     for(int i=0;i<MAX_NAME_LEN;i++)align_space[i] = ' ';
     align_space[MAX_NAME_LEN-1] = '\0';
@@ -637,12 +748,12 @@ void out_info(struct file_buf * fb, struct format_info fi) {
     if (_args[ARGS_LONGINFO]) {
         printf("%-2lu ", fb->st.st_nlink);
 
-        align_i = fi.uname_max_len - strlen(fb->uname) + 1;
+        align_i = fi->uname_max_len - strlen(fb->uname) + 1;
         align_space[align_i] = '\0';
         printf("%s%s",fb->uname,align_space);
         
         align_space[align_i] = ' ';
-        align_i = fi.group_max_len - strlen(fb->group) + 1;
+        align_i = fi->group_max_len - strlen(fb->group) + 1;
         align_space[align_i] = '\0';
         printf("%s%s",fb->group, align_space);
         align_space[align_i] = ' ';
@@ -694,7 +805,7 @@ void out_info(struct file_buf * fb, struct format_info fi) {
             printf("%c",flag);
     }
 
-    align_i = fi.name_max_len - strlen(fb->name) + 1 + (flag>0?0:1);
+    align_i = fi->name_max_len - strlen(fb->name) + 1 + (flag>0?0:1);
     align_space[align_i] = '\0';
     printf("%s", align_space);
 
@@ -720,6 +831,7 @@ void out_info(struct file_buf * fb, struct format_info fi) {
 
     printf("\n");
 }
+
 void format_size(unsigned long long size, char * fstr) {
     if (size <= 1024)
         sprintf(fstr, "%lluB",size);
