@@ -9,7 +9,7 @@
 #include <dirent.h>
 
 char *_path[] = {
-    "\0",
+    NULL,
     "/bin",
     "/sbin",
     "/usr/bin",
@@ -17,6 +17,8 @@ char *_path[] = {
     "/usr/local/bin",
     "/usr/local/sbin"
 };
+
+char _home_bin[256] = {'\0'};
 
 #define ARGS_END    1024
 
@@ -34,19 +36,18 @@ int main(int argc, char * argv[])
 {
     _args_ind = 0;
     char * path = getenv("HOME");
-    char home_bin[256] = {'\0'};
-    strcpy(home_bin, path);
-    strcat(home_bin, "/bin");
+    if (path) {
+        strcpy(_home_bin, path);
+        strcat(_home_bin, "/bin");
+    }
     
     struct stat st;
 
-    if (access(home_bin,F_OK|R_OK|X_OK)==0
-        && lstat(home_bin, &st)==0
+    if (access(_home_bin,F_OK|R_OK|X_OK)==0
+        && lstat(_home_bin, &st)==0
         && S_ISDIR(st.st_mode)
     ) {
-        _path[0] = home_bin;
-    } else {
-        home_bin[0] = '\0';
+        _path[0] = _home_bin;
     }
 
     int pid = 0;
@@ -123,6 +124,8 @@ int find_command(char * dir_list[], int n, char * name) {
     struct dirent * rd;
 
     for (int i=0; i<n; i++) {
+        if (dir_list[i]==NULL)continue;
+
         d = opendir(dir_list[i]);
         if (d==NULL) {
             perror("opendir");
