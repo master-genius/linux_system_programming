@@ -141,8 +141,9 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
                         strcat(msg.msg, buf);
                 }
             }
-            printf("recieved: %s\n", msg.msg);
-            if (strcmp(msg.msg, "//quit")==0) {
+            printf("bytes:%ld recieved: %s\n", strlen(msg.msg),msg.msg);
+
+            if (strncmp(msg.msg, "//quit", 6)==0) {
                 ep_delfd(efd, evt[i].data.fd);
                 close(evt[i].data.fd);
                 return ;
