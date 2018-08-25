@@ -142,6 +142,11 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
                 }
             }
             printf("recieved: %s\n", msg.msg);
+            if (strcmp(msg.msg, "//quit")==0) {
+                ep_delfd(efd, evt[i].data.fd);
+                close(evt[i].data.fd);
+                return ;
+            }
             save_msg(evt[i].data.fd, &msg);
             ep_modfd(efd, evt[i].data.fd, EPOLLOUT, 1);
         }else if (evt[i].events & EPOLLOUT){
@@ -151,8 +156,8 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             printf("send msg: %s\n", emsg->data.msg);
             send(evt[i].data.fd, (void*)emsg->data.msg, strlen(emsg->data.msg), 0);
             ep_modfd(efd, evt[i].data.fd, EPOLLIN, 1);
-            ep_delfd(efd, evt[i].data.fd);
-            close(evt[i].data.fd);
+            //ep_delfd(efd, evt[i].data.fd);
+            //close(evt[i].data.fd);
         
         }else {
             printf("nothing to do\n");
