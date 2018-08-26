@@ -21,6 +21,11 @@
 
 #define MAX_MSG_SIZE    8192
 
+#define RECV_MSG_NONE   0
+#define RECV_MSG_ERR    1
+#define RECV_MSG_OK     2
+#define RECV_MSG_CLOSE  3
+
 struct msg_block {
     int msg_end;
     char msg[MAX_MSG_SIZE+1];
@@ -109,6 +114,7 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
 
     char buf[BUFF_SIZE];
     int recv_count = 0;
+    int recv_flag = RECV_MSG_NONE;
 
     for (int i=0; i<number; i++) {
         if (lisd == evt[i].data.fd) {
@@ -121,35 +127,47 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             struct msg_block msg;
             msg.msg_end = 0;
             msg.msg[0] = '\0';
-
+            recv_flag = RECV_MSG_NONE;
             while (1) {
                 memset(buf, '\0', BUFF_SIZE);
 
                 recv_count = recv(evt[i].data.fd, buf, BUFF_SIZE-1, 0);
                 if (recv_count < 0) {
                     if (errno==EAGAIN || errno==EWOULDBLOCK) {
+                        recv_flag = RECV_MSG_OK;
                         break;
                     }
+                    recv_flag = RECV_MSG_ERR;
                     close(evt[i].data.fd);
                     break;
-                } else if (recv_count == 0) {
+                } else if (recv_count == 0) { //connection closed
+                    recv_flag = RECV_MSG_CLOSE;
+                    ep_delfd(efd, evt[i].data.fd);
                     close(evt[i].data.fd);
+                    break;
                 } else {
-                    //printf("%s", buf);
                     msg_count += recv_count;
-                    if (msg_count < MAX_MSG_SIZE)
+                    if (msg_count < MAX_MSG_SIZE) {
+                        recv_flag = RECV_MSG_OK;
                         strcat(msg.msg, buf);
+                    }
                 }
             }
-            printf("bytes:%ld recieved: %s\n", strlen(msg.msg),msg.msg);
+            if (recv_flag == RECV_MSG_OK) {
+                printf("bytes:%ld recieved: %s\n", strlen(msg.msg),msg.msg);
 
-            if (strncmp(msg.msg, "//quit", 6)==0) {
-                ep_delfd(efd, evt[i].data.fd);
-                close(evt[i].data.fd);
-                return ;
+                if (strncmp(msg.msg, "//quit", 6)==0) {
+                    ep_delfd(efd, evt[i].data.fd);
+                    close(evt[i].data.fd);
+                    return ;
+                }
+                save_msg(evt[i].data.fd, &msg);
+                ep_modfd(efd, evt[i].data.fd, EPOLLOUT, 1);
+            } else if (recv_flag == RECV_MSG_CLOSE) {
+                printf("client closed\n");
+            } else {
+                printf("Error: recv msg code = %d\n", recv_flag);
             }
-            save_msg(evt[i].data.fd, &msg);
-            ep_modfd(efd, evt[i].data.fd, EPOLLOUT, 1);
         }else if (evt[i].events & EPOLLOUT){
             struct event_msg * emsg = get_msg(evt[i].data.fd);
             if (emsg == NULL)
