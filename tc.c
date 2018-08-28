@@ -22,6 +22,10 @@ int main(int ac, char* av[])
     if(ac>2)
         port=atoi(av[2]);
 
+    fork();
+    fork();
+    fork();
+
     struct sockaddr_in addr;
 
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
