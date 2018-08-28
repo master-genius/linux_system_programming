@@ -121,12 +121,12 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
 
     for (int i=0; i<number; i++) {
         if (lisd == evt[i].data.fd) {
-            printf("get connection...\n");
             connfd = accept(lisd, (struct sockaddr*)&conn, &conn_size);
             if (connfd < 0) {
-                perror("accept");
+                //perror("accept");
                 return ;
             }
+            printf("get connection...\n");
             ep_addfd(efd, connfd, 1);
         } else if (evt[i].events & EPOLLIN){
             printf("pid:%d get data from %d:\n", _self_pid, evt[i].data.fd);
