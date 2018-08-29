@@ -43,8 +43,8 @@
 #define ARGS_RECUR      11    //recursion
 #define ARGS_STATIS     12    //statistic
 #define ARGS_DIRSELF    13
-#define ARGS_REGDIR     14
-#define ARGS_REGFIL     15
+#define ARGS_REGNODIR   14
+#define ARGS_REGNOFIL   15
 #define ARGS_SORT       16
 #define ARGS_NODIR      17    //not list dir, just file
 #define ARGS_SORT_TYPE  18    //sort type : sort in cell of dir or sort all file
@@ -239,10 +239,10 @@ int main(int argc, char *argv[])
             _args[ARGS_CREATTM] = 1;
         else if (strcmp(argv[i],"--sort")==0)
             _args[ARGS_SORT] = SORT_BYNAME;
-        else if(strcmp(argv[i],"--rgx-file")==0)
-            _args[ARGS_REGFIL] = 1;
-        else if(strcmp(argv[i],"--rgx-dir")==0)
-            _args[ARGS_REGDIR] = 1;
+        else if(strcmp(argv[i],"--no-file")==0)
+            _args[ARGS_REGNOFIL] = 1;
+        else if(strcmp(argv[i],"--no-dir")==0)
+            _args[ARGS_REGNODIR] = 1;
         else if (strncmp(argv[i],"--sort=",7)==0) {
             if (strlen(argv[i])==8) {
                 if (argv[i][7] == SORT_BYTM
@@ -481,15 +481,15 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
             }
 
             if (_args[ARGS_REGEX]) {
-                if (S_ISDIR(sttmp.st_mode) && _args[ARGS_RGXFIL]) {
+                if (S_ISDIR(sttmp.st_mode) && _args[ARGS_REGNODIR]) {
                     continue;
-                } else if ((!S_ISDIR(sttmp.st_mode)) && _args[ARGS_RGXDIR]) {
-                    printf("axc");
+                } else if ((!S_ISDIR(sttmp.st_mode)) && _args[ARGS_REGNOFIL]) {
                     continue;
                 }
 
                 if (regexec(_regcom, rd->d_name, 1, _regmatch, 0)!=0)
                     continue;
+
                 cur_count++;
             }
             if (_args[ARGS_STATIS] || _args[ARGS_SHOWSTATS])
@@ -642,9 +642,11 @@ void out_info(struct file_buf * fb, struct format_info fi) {
     align_space[MAX_NAME_LEN-1] = '\0';
 
     int align_i = 0;
-
+    
+    /*
     if (_args[ARGS_REGEX] && S_ISDIR(fb->st.st_mode))
         return ;
+    */
 
     if (_args[ARGS_INO])
         printf("%-8lu ", fb->st.st_ino);

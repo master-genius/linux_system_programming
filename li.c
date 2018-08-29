@@ -43,8 +43,8 @@
 #define ARGS_RECUR      11    //recursion
 #define ARGS_STATIS     12    //statistic
 #define ARGS_DIRSELF    13
-#define ARGS_REGDIR     14
-#define ARGS_REGFIL     15
+#define ARGS_REGNODIR   14
+#define ARGS_REGNOFIL   15
 #define ARGS_SORT       16
 #define ARGS_NODIR      17    //not list dir, just file
 #define ARGS_SORT_TYPE  18    //sort type : sort in cell of dir or sort all file
@@ -68,7 +68,7 @@
 
 char _args[ARGS_END] = {0};
 
-#define PATH_CELL_END   16
+#define PATH_CELL_END   8
 
 struct path_cell {
     char path[MAX_NAME_LEN];
@@ -190,6 +190,8 @@ void destroy_file_list(struct file_buf_list * fl);
 
 void format_size(unsigned long long size, char * fstr);
 
+void out_color(struct file_buf * fb, char *pname);
+
 void help(void)
 {
     char *help_info[] = {
@@ -252,6 +254,10 @@ int main(int argc, char *argv[])
             _args[ARGS_CREATTM] = 1;
         else if (strcmp(argv[i],"--sort")==0)
             _args[ARGS_SORT] = SORT_BYNAME;
+        else if(strcmp(argv[i],"--no-file")==0)
+            _args[ARGS_REGNOFIL] = 1;
+        else if(strcmp(argv[i],"--no-dir")==0)
+            _args[ARGS_REGNODIR] = 1;
         else if (strncmp(argv[i],"--sort=",7)==0) {
             if (strlen(argv[i])==8) {
                 if (argv[i][7] == SORT_BYTM
@@ -637,6 +643,11 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
                     start_statis(sttmp, stats);
 
                 if (_args[ARGS_REGEX] && !S_ISDIR(sttmp.st_mode)) {
+                    if (S_ISDIR(sttmp.st_mode) && _args[ARGS_REGNODIR]) {
+                        continue;
+                    } else if ((!S_ISDIR(sttmp.st_mode)) && _args[ARGS_REGNOFIL]) {
+                        continue;
+                    }
                     if (regexec(_regcom, rd->d_name, 1, _regmatch, 0)!=0)
                         continue;
                     cur_count++;
@@ -729,15 +740,24 @@ int out_control(char *path, struct format_info * fi) {
     return 0;
 }
 
+void out_color(struct file_buf * fb, char *pname) {
+    if (S_ISDIR(fb->st.st_mode))
+        printf("\e[1;34m%s",pname);
+    else if(S_ISLNK(fb->st.st_mode))
+        printf("\e[2;36m%s",pname);
+    else if (S_ISREG(fb->st.st_mode) && access(fb->path,X_OK)==0)
+        printf("\e[1;35m%s",pname);
+    else
+        printf("%s",pname);
+    printf("\e[0;m");
+}
+
 void out_info(struct file_buf * fb, struct format_info * fi) {
     char align_space[MAX_NAME_LEN];
     for(int i=0;i<MAX_NAME_LEN;i++)align_space[i] = ' ';
     align_space[MAX_NAME_LEN-1] = '\0';
 
     int align_i = 0;
-
-    if (_args[ARGS_REGEX] && S_ISDIR(fb->st.st_mode))
-        return ;
 
     if (_args[ARGS_INO])
         printf("%-8lu ", fb->st.st_ino);
@@ -767,10 +787,15 @@ void out_info(struct file_buf * fb, struct format_info * fi) {
         printf("%s ",create_time);
     }
     
-    if ((_args[ARGS_PATH] || _args[ARGS_REGEX]) && strlen(fb->path)>0)
-        printf("%s",fb->path);
-    else {
+    if ((_args[ARGS_PATH] || _args[ARGS_REGEX]) && strlen(fb->path)>0){
+        if (_args[ARGS_COLOR] && _standard_out==STDOUT_SCRN)
+            out_color(fb, fb->path);
+        else
+            printf("%s",fb->path);
+    } else {
         if (_args[ARGS_COLOR] && _standard_out==STDOUT_SCRN) {
+            out_color(fb, fb->name);
+            /*
             if (S_ISDIR(fb->st.st_mode))
                 printf("\e[1;34m%s",fb->name);
             else if(S_ISLNK(fb->st.st_mode))
@@ -780,6 +805,7 @@ void out_info(struct file_buf * fb, struct format_info * fi) {
             else
                 printf("%s",fb->name);
             printf("\e[0;m");
+            */
         }
         else
             printf("%s", fb->name);
