@@ -538,7 +538,6 @@ int recur_dir(struct path_list* pl, int max_height, struct statis* stats){
                 }
             }
 
-            //printf("%s  %s\n", rd->d_name, nbuf);
             fi.count++;
         }
         if ((_args[ARGS_REGEX] && cur_count > 0) || _args[ARGS_REGEX]==0) {
@@ -643,11 +642,6 @@ void out_info(struct file_buf * fb, struct format_info fi) {
 
     int align_i = 0;
     
-    /*
-    if (_args[ARGS_REGEX] && S_ISDIR(fb->st.st_mode))
-        return ;
-    */
-
     if (_args[ARGS_INO])
         printf("%-8lu ", fb->st.st_ino);
     
@@ -685,17 +679,6 @@ void out_info(struct file_buf * fb, struct format_info fi) {
     } else {
         if (_args[ARGS_COLOR] && _standard_out==STDOUT_SCRN) {
             out_color(fb, fb->name);
-            /*
-            if (S_ISDIR(fb->st.st_mode))
-                printf("\e[1;34m%s",fb->name);
-            else if(S_ISLNK(fb->st.st_mode))
-                printf("\e[2;36m%s",fb->name);
-            else if (S_ISREG(fb->st.st_mode) && access(fb->path,X_OK)==0)
-                printf("\e[1;35m%s",fb->name);
-            else
-                printf("%s",fb->name);
-            printf("\e[0;m");
-            */
         }
         else
             printf("%s", fb->name);
