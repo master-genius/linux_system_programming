@@ -179,29 +179,8 @@ void format_size(unsigned long long size, char * fstr);
 
 void out_color(struct file_buf * fb, char *pname);
 
-void help(void)
-{
-    char *help_info[] = {
-        "显示文件/目录信息,类似于ls命令。\n",
-        "参数/选项：\n",
-        "-l ：显示详细信息，包括权限、用户、用户组、大小等信息；\n-m ：权限\n",
-        "-a ：显示隐藏文件；\n-i ：i-node编号；\n-s ：大小；\n-f ：文件类型字符\n",
-        "-t ：统计信息；\n-p ：显示路径；\n-c ：文件创建时间\n",
-        "-r ：递归显示；\n--deep ：设置递归深度，--deep=5；\n",
-        "--lnk ：链接目标文件\n",
-        "--regex [REGEX] ：使用正则表达式搜索文件，注意这不会对目录生效\n",
-        "--show-stats ：只显示统计信息\n",
-        "示例：\n",
-        "ls -al /usr \nls -r /usr\nls -rfst /usr/share /usr/local\n",
-        "ls -rt /usr --regex 'php$'\n",
-        "\n",
-        "\0"
-    };
-    int i=0;
-    while (strcmp(help_info[i],"\0")!=0) {
-        printf("%s",help_info[i++]);
-    }
-}
+void help(void);
+
 
 int main(int argc, char *argv[])
 {
@@ -801,6 +780,32 @@ void destroy_path_list(struct path_list * pl) {
         ptmp = pl->next;
         free(pl);
         pl = ptmp;
+    }
+}
+
+void help(void)
+{
+    char *help_info[] = {
+        "显示文件/目录信息,类似于ls命令。\n",
+        "参数/选项：\n",
+        "-l ：显示详细信息，包括权限、用户、用户组、大小等信息；\n-m ：权限\n",
+        "-a ：显示隐藏文件；\n-i ：i-node编号；\n-s ：大小；\n-f ：文件类型字符\n",
+        "-t ：统计信息；\n-p ：显示路径；\n-c ：文件创建时间\n",
+        "-r ：递归显示；\n--deep ：设置递归深度，--deep=5；\n",
+        "--lnk ：链接目标文件\n",
+        "--regex [REGEX] ：使用正则表达式搜索文件，会匹配目录和文件\n",
+        "--no-dir : 配合--regex使用，不匹配目录\n",
+        "--no-file : 配合--regex使用，不匹配文件\n",
+        "--show-stats ：只显示统计信息\n",
+        "示例：\n",
+        "ls -al /usr \nls -r /usr\nls -rfst /usr/share /usr/local\n",
+        "ls -rt /usr --regex 'php$'\n",
+        "\n",
+        "\0"
+    };
+    int i=0;
+    while (strcmp(help_info[i],"\0")!=0) {
+        printf("%s",help_info[i++]);
     }
 }
 
