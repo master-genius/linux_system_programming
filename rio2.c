@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     dup2(fd,1);
     close(fd);
     
-    printf("IO: redirect test\n");
+    printf("IO redirect %d\n", fd);
 
     return 0;
 }

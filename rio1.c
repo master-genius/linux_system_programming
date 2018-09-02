@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    printf("Linux is great\n");
+    printf("Linux is great %d\n", fd);
 
     return 0;
 }
