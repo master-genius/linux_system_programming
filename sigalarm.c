@@ -3,14 +3,12 @@
 #include <unistd.h>
 #include <signal.h>
 
-void alarm_handle(int sig) {
-
-}
-
-
 int main(int argc, char *argv[])
 {
-    alarm(2);
+    int sd = 0;
+    sd = alarm(2);
+    sd = alarm(0);
+    printf("%u \n", sd);
     pause();
     printf("I am a programmer\n");
 
