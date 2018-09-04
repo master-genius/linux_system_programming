@@ -2,10 +2,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 
 void alarm_do(int sig) {
-    //signal(SIGALRM, alarm_do);
-    printf("hello\n");
+    time_t tm = time(NULL);
+    printf("%s",ctime(&tm));
 }
 
 int main(int argc, char *argv[]) {
