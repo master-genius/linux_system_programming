@@ -6,17 +6,17 @@
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <time.h>
 
 #define DATA_BUF_LEN    1024
 
-int _fd;
 char _buffer[DATA_BUF_LEN+1];
 
 void handle_sig(int sig) {
     printf("get signal: %d\n", sig);
-    sleep(2);
-    printf("close file\n");
-    close(_fd);
+    sleep(1);
+    time_t tm = time(NULL);
+    printf("done : %s", ctime(&tm));
 }
 
 int main(int argc, char *argv[]) {
@@ -37,16 +37,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    _fd = open("sigdatatest", O_CREAT|O_RDWR, S_IWUSR|S_IRUSR);
-    if (_fd<0) {
-        perror("open");
-        return -1;
-    }
-
     while (1) {
         fgets(_buffer, DATA_BUF_LEN,stdin);
-        printf("writing to file: %s", _buffer);
-        write(_fd, _buffer, strlen(_buffer));
+        printf("    %s", _buffer);
     }
 
     return 0;
