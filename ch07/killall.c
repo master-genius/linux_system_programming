@@ -12,7 +12,7 @@
 int process_flag = PCS_UNSET;
 
 void handle_sig(int sig) {
-    printf("%d get signal: %u\n", getpid(), sig);
+    printf("%d get signal: %u  ", getpid(), sig);
     switch (sig) {
         case SIGINT:
             printf("SIGINT -> exit...\n");
@@ -53,16 +53,16 @@ int main(int argc, char *argv[]) {
     if (process_flag == PCS_UNSET) {
     
     } else if (process_flag == PCS_PARENT) {
-        printf("parent:%d\n", getpid());
-        int status = 0;
-        for(int i=0;i<child; i++) {
-            printf("child %d, exit code: %d\n",wait(&status), status);
-        }
+        printf("parent %d will kill all child\n ", getpid());
+        sleep(5);
+        kill(0, SIGTERM);
     } else if (process_flag == PCS_CHILD) {
         pid_t myid = getpid();
         signal(SIGTERM, handle_sig);
-        printf("child:%d\n",myid);
-        sleep(myid % 5);
+        while(1) {
+            printf("child %d say : hello liux.\n", myid);
+            sleep(1);
+        }
     }
 
     return 0;

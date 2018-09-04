@@ -39,10 +39,13 @@ int find_command(char * dir_list[], int n, char* name);
 
 int build_in(char * cmd, char * cmd_argv[]);
 
+void handle_sig(int sig) {
+    printf("\n");
+}
+
 int main(int argc, char * argv[])
 {
-    signal(SIGINT, SIG_IGN);
-    signal(SIGTERM, SIG_IGN);
+    signal(SIGINT, handle_sig);
 
     _args_ind = 0;
     char * path = getenv("HOME");
