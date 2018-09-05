@@ -7,8 +7,8 @@
 #include <fcntl.h>
 
 void out_st_info(char * path, struct stat * st) {
-    printf("%s : %lu bytes\n", path, st->st_size);
-    printf("    %-9lu  %-2lu ", st->st_ino, st->st_nlink);
+    printf("%s -> size: %lu bytes\n", path, st->st_size);
+    printf("    i-node: %-9lu  hard link: %-2lu ", st->st_ino, st->st_nlink);
 
     char * ptype = "";
     switch (st->st_mode & S_IFMT) {
