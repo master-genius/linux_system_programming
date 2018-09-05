@@ -8,7 +8,7 @@
 
 void out_st_info(char * path, struct stat * st) {
     printf("%s : %lu bytes\n", path, st->st_size);
-    printf("    %-9d  %-2d ", st->st_ino, st->st_nlink);
+    printf("    %-9lu  %-2lu ", st->st_ino, st->st_nlink);
 
     char * ptype = "";
     switch (st->st_mode & S_IFMT) {
@@ -29,6 +29,9 @@ void out_st_info(char * path, struct stat * st) {
             break;
         case S_IFREG:
             ptype = "regular";
+            if (access(path, X_OK)==0) {
+                ptype = "regular*";
+            }
             break;
         case S_IFLNK:
             ptype = "link";
