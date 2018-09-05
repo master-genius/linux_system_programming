@@ -22,10 +22,6 @@ int main(int argc, char *argv[]) {
     chdir("/");
     setsid();
     
-    close(0);
-    close(1);
-    close(2);
-
     int fd = open("/dev/null", O_RDWR);
     dup2(fd, 0);
     dup2(fd, 1);
@@ -43,8 +39,8 @@ int main(int argc, char *argv[]) {
     while(1) {
         time(&t);
         tm = ctime(&t);
-        strcpy(log, tm);
-        write(fd, log, strlen(log));
+        //strcpy(log, tm);
+        write(fd, tm, strlen(tm));
         count++;
         sleep(2+count/3);
     }
