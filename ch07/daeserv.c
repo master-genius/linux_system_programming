@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
     dup2(fd, 2);
     close(fd);
 
-    fd = open("/tmp/dserv", O_CREAT|O_APPEND|O_RDWR, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    fd = open("/tmp/dserv", O_CREAT|O_APPEND|O_RDWR, 0644);
     if (fd<0) {
         return -1;
     }
