@@ -11,21 +11,6 @@
 
 int process_flag = PCS_UNSET;
 
-void handle_sig(int sig) {
-    printf("%d get signal: %u\n", getpid(), sig);
-    switch (sig) {
-        case SIGINT:
-            printf("SIGINT -> exit...\n");
-            exit(0);
-        case SIGTERM:
-            printf("SIGTERM -> exit...\n");
-            exit(0);
-        case SIGALRM:
-            printf("@@\n");
-            break;
-        default:;
-    }
-}
 
 int main(int argc, char *argv[]) {
     
@@ -60,7 +45,6 @@ int main(int argc, char *argv[]) {
         }
     } else if (process_flag == PCS_CHILD) {
         pid_t myid = getpid();
-        signal(SIGTERM, handle_sig);
         printf("child:%d\n",myid);
         sleep(myid % 5);
     }
