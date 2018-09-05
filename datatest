@@ -1,4 +1,0 @@
-#!/bin/bash
-lscpu
-uname -a
-exit 0
