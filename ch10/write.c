@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
 
     int count = 0;
 
-    count = write(fd, buffer, strlen(buffer)+10);
+    count = write(fd, buffer, strlen(buffer));
     if (count < 0) {
         perror("write");
         ret = 2;
