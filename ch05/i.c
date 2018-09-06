@@ -12,6 +12,9 @@
 #include <regex.h>
 #include <time.h>
 
+
+#define PROGRAM_NAME    "look"
+
 #define TYPE_DIR        '/'
 #define TYPE_LNK        '@'
 #define TYPE_FIFO       '|'
@@ -105,7 +108,7 @@ init_path_list() {
 }
 
 void destroy_path_list(struct path_list * pl) {
-    pl = pl->next;  
+    pl = pl->next;
     struct path_list * ptmp;
     ptmp = pl;
 
@@ -117,7 +120,7 @@ void destroy_path_list(struct path_list * pl) {
 }
 
 struct path_list *
-add_path_list(struct path_list * pl, char * path);
+add_path_list(struct path_list * pl, char * path, int height);
 
 struct path_list *
 del_path_list(struct path_list * pl, struct path_list * pnode);
@@ -133,8 +136,8 @@ add_path_list(struct path_list * pl, char * path, int height) {
     struct path_list * ptmp;
 
     if (plast->end_ind < PATH_CELL_END) {
-        plast->end_ind + 1;
         pcell = plast->pce+plast->end_ind;
+        plast->end_ind + 1;
     } else {
         ptmp = (struct path_list*)malloc(sizeof(struct path_list));
         if (ptmp==NULL) {
@@ -163,6 +166,19 @@ add_path_list(struct path_list * pl, char * path, int height) {
     return ptmp;
 }
 
+struct path_list *
+del_path_list(struct path_list * pl, struct path_list * pnode) {
+    
+}
+
+struct path_list *
+get_path_list_last(struct path_list * pl) {
+    struct path_list * pcur = pl;
+    while (pcur!=NULL && pcur->next!=NULL) {
+        pcur = pcur->next;
+    }
+    return pcur;
+}
 
 /*
     global vars
@@ -177,14 +193,41 @@ struct infoargs {
     regmatch_t regmatch[1];
     
     //standard out type
-    int std_out_type;
+    int stdout_type;
 };
 
+int set_stdout_type(int * stdo) {
+    struct stat dst;
+    if (fstat(1, &dst) < 0) {
+        perror("fstat");
+        return -1;
+    }
+
+    if (S_ISFIFO(dst.st_mode))
+        *stdo = STDOUT_FIPI;
+    else
+        *stdo = STDOUT_SCRN;
+
+    return 0;
+}
+
+void init_infoargs(struct infoargs * ia) {
+    bzero(ia->args, sizeof(char)*ARGS_END);
+    ia->stdout_type = STDOUT_SCRN;
+}
+
+//define global var
+struct infoargs _iargs;
 
 
 
-
-
+/*
+   定义文件缓存的结构，用于存储获取到的文件名、
+   状态信息、所属用户和组等信息。
+   然后定义文件缓存的链表结构，定义文件列表缓存结构。
+   文件列表缓存结构包含文件缓存结构体数组，以及文件缓存链表
+   当数组使用完毕开始使用链表，目的在于平衡存储与性能。
+*/
 struct file_buf {
     char name[256];
     char path[MAX_NAME_LEN];
@@ -193,24 +236,56 @@ struct file_buf {
     struct stat st;
 };
 
-
-#define BUFF_LEN    512
+#define BUFF_LEN    2048
 
 struct file_buf_list {
     struct file_buf fbuf;
-    int count;
+    int use_status;
     struct file_buf_list * next;
 };
 
 struct file_list_cache {
     int end_ind;
     struct file_buf fcache[BUFF_LEN+1];
+    int list_count;
+    struct file_buf_list fbhead;
+    struct file_buf_list * flast;
 };
 
-struct file_list_cache _file_cache;
+void init_flist_cache (struct file_list_cache * flcache) {
+    flcache->end_ind = 0;
+    flcache->list_count = 0;
+    flcache->fbhead->next = NULL;
+    flcache->flast = &flcache->fbhead;
+}
 
-struct file_buf_list _fbuf_list_head;
-struct file_buf_list * _fbuf_list_end;
+int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
+    struct file_buf * fbtmp = NULL;
+    if (flcache->end_ind < BUFF_LEN) {
+        fbtmp = &flcahce->fcache[flcache->end_ind];
+        flcache->end_ind += 1;
+
+    } else {
+        fbtmp = (struct file_buf *)malloc(sizeof(struct file_buf));
+        if (fbtmp == NULL) {
+            perror("malloc");
+            return -1;
+        }
+        fbtmp->next = NULL;
+        flcache->flast = fbtmp;
+        flcache->list_count += 1;
+    }
+    memcpy(fbtmp,fbuf, sizeof(struct file_buf));
+    return 0;
+}
+
+void clear_flcache(struct file_list_cache *flcache) {
+    
+}
+
+void 
+
+
 
 struct statis {
     unsigned long long dir_count;
@@ -410,7 +485,10 @@ int main(int argc, char *argv[])
                     recur_deep = 0;
                 }
                 else if (argv[i][a] == 'c')
-                    _args[ARGS_CREATTM] = 1;
+                    _args[ARGS_CREATM] = 1;
+                else { //不匹配则可能是目录/文件名称
+                    
+                }
             }
         }
         else if (access(argv[i], F_OK)==0) {
