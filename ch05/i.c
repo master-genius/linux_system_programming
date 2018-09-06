@@ -73,20 +73,13 @@ void list_type_info() {
 #define STDOUT_SCRN     1
 #define STDOUT_FIPI     2
 
-struct infoargs {
-    char args[ARGS_END];
-    regex_t    regcom[1];
-    regmatch_t regmatch[1];
-    int std_out_type;
-};
-
-
 #define MAX_NAME_LEN    2048
-
-
-
 #define PATH_CELL_END   8
 
+
+/*
+    save path info 
+*/
 struct path_cell {
     char path[MAX_NAME_LEN];
     char is_root;
@@ -94,13 +87,102 @@ struct path_cell {
     int  height;
 };
 
+/*
+    path list for recur dir 
+*/
 struct path_list {
     struct path_cell pce[PATH_CELL_END];
-    int ind_end;
+    int end_ind;
 
     struct path_list * next;
     struct path_list * prev;
 };
+
+struct path_list *
+init_path_list() {
+   static struct path_list phead;
+   return &phead;
+}
+
+void destroy_path_list(struct path_list * pl) {
+    pl = pl->next;  
+    struct path_list * ptmp;
+    ptmp = pl;
+
+    while(pl!=NULL) {
+        ptmp = pl->next;
+        free(pl);
+        pl = ptmp;
+    }
+}
+
+struct path_list *
+add_path_list(struct path_list * pl, char * path);
+
+struct path_list *
+del_path_list(struct path_list * pl, struct path_list * pnode);
+
+struct path_list *
+get_path_list_last(struct path_list * pl);
+
+
+struct path_list *
+add_path_list(struct path_list * pl, char * path, int height) {
+    struct path_list * plast = get_path_list_last(pl);
+    struct path_cell * pcell = NULL;
+    struct path_list * ptmp;
+
+    if (plast->end_ind < PATH_CELL_END) {
+        plast->end_ind + 1;
+        pcell = plast->pce+plast->end_ind;
+    } else {
+        ptmp = (struct path_list*)malloc(sizeof(struct path_list));
+        if (ptmp==NULL) {
+            perror("malloc");
+            return NULL;
+        }
+        plast->next = pcell;
+        ptmp->next = NULL;
+        ptmp->prev = plast;
+        ptmp->end_ind = 0;
+        pcell = ptmp->pce;
+    }
+
+    strcpy(pcell->path, path);
+    pcell->is_root = 0;
+    path_len = strlen(path);
+    if (path_len==1 && path[0]=='/') {
+        pcell->is_root = 1;
+    }
+
+    pcell->plen = path_len;
+    if (height > 0) {
+        pcell->height = height;
+    }
+
+    return ptmp;
+}
+
+
+/*
+    global vars
+*/
+struct infoargs {
+
+    //main arguments
+    char args[ARGS_END];
+
+    //for regex
+    regex_t    regcom[1];
+    regmatch_t regmatch[1];
+    
+    //standard out type
+    int std_out_type;
+};
+
+
+
+
 
 
 struct file_buf {
