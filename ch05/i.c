@@ -342,7 +342,7 @@ int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
     struct file_buf * fbtmp = NULL;
     struct file_buf_list *fl = NULL;
     if (flcache->end_ind < BUFF_LEN) {
-        fbtmp = &flcache->fcache[flcache->end_ind];
+        fbtmp = flcache->fcache+flcache->end_ind;
         flcache->end_ind += 1;
 
     } else {
@@ -352,30 +352,27 @@ int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
             return -1;
         }
         fl->next = NULL;
+        flcache->flast->next = fl;
         flcache->flast = fl;
         flcache->list_count += 1;
         fbtmp = &fl->fbuf;
     }
-    memcpy(fbtmp,fbuf, sizeof(struct file_buf));
+    memcpy(fbtmp, fbuf, sizeof(struct file_buf));
 
     return 0;
-}
-
-void clear_flcache(struct file_list_cache *flcache) {
-    flcache->end_ind = 0;
-    flcache->flast = &flcache->fbhead;
 }
 
 void destroy_flcache(struct file_list_cache *flcache) {
     flcache->end_ind = 0;
     struct file_buf_list * fbtmp = flcache->fbhead.next;
-    struct file_buf_list * fbtmp2;
+    struct file_buf_list * fbtmp2 = NULL;
+    
     while(fbtmp) {
-        if (fbtmp->next)
-            fbtmp2 = fbtmp->next;
+        fbtmp2 = fbtmp->next;
         free(fbtmp);
         fbtmp = fbtmp2;
     }
+    flcache->list_count = 0;
     flcache->fbhead.next = NULL;
     flcache->flast = &flcache->fbhead;
     free(flcache->fba);
@@ -396,7 +393,9 @@ int fbuf_sort(struct file_list_cache * flcache, int sort_flag) {
 
     struct file_buf_list *fl = flcache->fbhead.next;
     while(fl) {
-        flcache->fba[i++] = &fl->fbuf;
+        flcache->fba[i] = &fl->fbuf;
+        i++;
+        fl = fl->next;
     }
     
     qsortfbuf(flcache->fba, 0, total_count-1);
@@ -429,6 +428,7 @@ add_fbuf_dirs_to_plist(struct file_list_cache* flcache,
             if (S_ISDIR(fbtmp->st.st_mode)) {
                 add_path_list(plist, fbtmp->path, fbtmp->height);
             }
+            fl = fl->next;
         }
     }
     
@@ -559,7 +559,7 @@ void out_info(struct file_buf *fbuf, char *ppath,
         posi += count;
     }
 
-    sprintf(fmt_str, "%%-%ldc", fmt_name_len-strlen(fbuf->name));
+    sprintf(fmt_str, "%%-%ldc", fmt_name_len-strlen(fbuf->name)+1);
     count = sprintf(outline+posi, fmt_str, ' ');
     posi += count;
     
