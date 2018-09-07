@@ -36,10 +36,10 @@ void list_type_info() {
     printf(TYPE_INFO);
 }
 
-#define SORT_BYNAME     'n'
-#define SORT_BYTM       't'
-#define SORT_BYCHTM     'c'
-#define SORT_BYSIZE     's'
+#define SORT_BYNAME     0
+#define SORT_BYTM       1
+#define SORT_BYCHTM     2
+#define SORT_BYSIZE     3
 
 #define SORT_TY_CELL    'd'
 #define SORT_TY_ALL     'a'
@@ -77,8 +77,55 @@ void list_type_info() {
 #define STDOUT_FIPI     2
 
 #define MAX_NAME_LEN    2048
-#define PATH_CELL_END   8
+#define PATH_CELL_END   16
 
+#define SWAP(a,b)   tmp=a;a=b;b=tmp;
+
+void qsort_core(void * base, int start, int end,
+    unsigned int size, int (*comp)(const void *, const void *)
+);
+
+void vqsort(void* base, unsigned int nmemb, unsigned int size, 
+    int(*comp)( const void *, const void *)
+) {
+    qsort_core(base, 0, nmemb/size - 1, size, comp);
+}
+
+//paradigm quick sort
+void qsort_core(void * base, int start, int end,
+    unsigned int size, int (*comp)(const void *, const void *)
+) {
+    if (start >= end) {
+        return ;
+    }
+    
+    int med = (end+start)/2;
+    int k = start;
+    int j;
+    char tmp;
+    char * b = base;
+
+    for (int i=0;i<size;i++) {
+        SWAP(b[med*size+i],b[start*size+i]);
+    }
+
+    for(j=start+1;j<=end;j++) {
+        if (comp(b+j*size,b+start*size) < 0) {
+            k += 1;
+            if (k==j)continue;
+            for(int i=0;i<size;i++) {
+                SWAP(b[k*size+i],b[j*size+i]);
+            }
+        }
+    }
+
+    for (int i=0; i<size; i++) {
+        SWAP(b[k*size+i],b[start*size+i]);
+    }
+
+    qsort_core(base, start, k-1, size, comp);
+    qsort_core(base, k+1, end, size, comp);
+}
 
 /*
     save path info 
@@ -99,16 +146,18 @@ struct path_list {
 
     struct path_list * next;
     struct path_list * prev;
+    struct path_list * plast;
 };
 
 struct path_list *
-init_path_list() {
-   static struct path_list phead;
-   return &phead;
+init_path_list(struct path_list* pl) {
+   pl->next = NULL;
+   pl->prev = NULL;
+   pl->plast = pl;
+   return pl;
 }
 
 void destroy_path_list(struct path_list * pl) {
-    pl = pl->next;
     struct path_list * ptmp;
     ptmp = pl;
 
@@ -131,7 +180,7 @@ get_path_list_last(struct path_list * pl);
 
 struct path_list *
 add_path_list(struct path_list * pl, char * path, int height) {
-    struct path_list * plast = get_path_list_last(pl);
+    struct path_list * plast =  pl->plast; //get_path_list_last(pl);
     struct path_cell * pcell = NULL;
     struct path_list * ptmp;
 
@@ -149,6 +198,7 @@ add_path_list(struct path_list * pl, char * path, int height) {
         ptmp->prev = plast;
         ptmp->end_ind = 0;
         pcell = ptmp->pce;
+        pl->plast = ptmp;
     }
 
     strcpy(pcell->path, path);
@@ -233,10 +283,11 @@ struct file_buf {
     char path[MAX_NAME_LEN];
     char uname[40];
     char group[40];
+    int height;
     struct stat st;
 };
 
-#define BUFF_LEN    2048
+#define BUFF_LEN    4096
 
 struct file_buf_list {
     struct file_buf fbuf;
@@ -250,6 +301,9 @@ struct file_list_cache {
     int list_count;
     struct file_buf_list fbhead;
     struct file_buf_list * flast;
+
+    //for sort
+    struct file_buf *fba;
 };
 
 void init_flist_cache (struct file_list_cache * flcache) {
@@ -257,6 +311,7 @@ void init_flist_cache (struct file_list_cache * flcache) {
     flcache->list_count = 0;
     flcache->fbhead->next = NULL;
     flcache->flast = &flcache->fbhead;
+    flcache->fba = NULL;
 }
 
 int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
@@ -280,11 +335,85 @@ int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
 }
 
 void clear_flcache(struct file_list_cache *flcache) {
-    
+    flcache->end_ind = 0;
+    flcache->flast = &flcache->fbhead;
 }
 
-void 
+void destroy_flcache(struct file_list_cache *flcache) {
+    flcache->end_ind = 0;
+    struct file_buf_list * fbtmp = flcache->fbhead->next;
+    struct file_buf_list * fbtmp2;
+    while(fbtmp) {
+        if (fbtmp->next)
+            fbtmp2 = fbtmp->next;
+        free(fbtmp);
+        fbtmp = fbtmp2;
+    }
+    flcache->fbhead->next = NULL;
+    flcache->flast = &flcache->fbhead;
+    free(flcache->fba);
+    flcache->fba = NULL;
+}
 
+int fbuf_name_comp(struct file_buf *a, struct file_buf *b) {
+    return strcomp(a->path, b->path);
+}
+
+int fbuf_size_comp(struct file_buf *a, struct file_buf *b) {
+    return ((a->st.st_size == b->st.st_size)
+            ? 0 : (
+                (a->st.st_size > b->st.st_size)? 1 : -1
+            )
+        );
+}
+
+int fbuf_sort(struct file_list_cache * flcache, int sort_flag) {
+    int total_count = flcache->end_ind + flcache->list_count;
+    flcache->fba = (struct file_buf*)malloc(sizeof(struct file_buf)*total_count);
+    if (flcache->fba==NULL) {
+        return -1;
+    }
+
+    int (*comp)(struct file_buf*, struct file_buf*);
+    if (sort_flag == SORT_BYSIZE) {
+        comp = fbuf_size_comp;
+    } else {
+        comp = fbuf_name_comp;
+    }
+    
+    vqsort(flcache->fba, sizeof(struct file_buf)*total_count, sizeof(struct file_buf), comp);
+
+    return 0;
+}
+
+
+int
+add_fbuf_dirs_to_plist(struct file_list_cache* flcache, struct path_list* plist) {
+    
+    struct file_buf *fbtmp = NULL;
+    struct file_buf_list * fl;
+
+    int i=0;
+
+    for (i=0; i<flcache->end_ind; i++) {
+        fbtmp = flcache->fcache[i];
+        if (S_ISDIR(fbtmp->st.st_mode)) {
+            add_path_list(plist, fbtmp->path, fbtmp->height);
+        }
+    }
+    
+    if (flcache->list_count > 0) {
+        fl = flcache->fbhead->next;
+        while(fl) {
+            fbtmp = &fl->fbuf;
+            if (S_ISDIR(fbtmp->st.st_mode)) {
+                add_path_list(plist, fbtmp->path, fbtmp->height);
+            }
+        }
+    }
+    
+    return 0;
+}
 
 
 struct statis {
@@ -307,60 +436,59 @@ struct format_info {
     int group_max_len;
 };
 
+struct allinfocell {
+    struct statis stats;
+    struct format_info fi;
+    struct file_list_cache flcache;
+};
 
-#define SWAP(a,b)   tmp=a;a=b;b=tmp;
+struct allinfocell _aic;
+struct path_list _pathlist;
 
-void qsortfbuf(struct file_buf *d[], int start, int end) {
-    if (start >= end) {
+#define MAX_OUTLINE_LEN     4096
+
+void out_info(struct file_buf *fbuf, char *ppath, struct format_info *fi) {
+    char outline[MAX_OUTLINE_LEN+128];
+    int posi = 0;
+    int out_max_len = strlen(fbuf->path) 
+                    + fi->uname_max_len
+                    + fi->group_max_len
+                    + fi->name_max_len
+                    - strlen(fbuf->name);
+
+    if (out_max_len > MAX_OUTLINE_LEN) {
         return ;
     }
 
-    int med = (end+start)/2;
-    int i = start;
-    int j = end;
-    struct file_buf *tmp = NULL;
+    if (_iargs[ARGS_INO]) {
+        posi = sprintf(outline + posi, "%-9lu ", fbuf->st.st_ino);
+    }
     
-    SWAP(d[med],d[start]);
-
-    for(j=start+1;j<=end;j++) {
-        if (strcmp(d[j]->name,d[start]->name) < 0) {
-            i++;
-            if (i==j)continue;
-            SWAP(d[i],d[j]);
-        }
+    if (_iargs[ARGS_MODE] || _iargs[ARGS_LONGINFO]) {
+        posi = sprintf(outline + posi, "%o ", fbuf->st.st_mode & 0777);
     }
 
-    SWAP(d[i],d[start]);
+    if (_iargs[ARGS_LONGINFO]) {
+        posi = sprintf(outline + posi, "%-2lu ", fbuf->st.st_link);
+    }
 
-    qsortfbuf(d, start, i-1);
-    qsortfbuf(d, i+1,end);
+
+    
+    int fmt_name_len = 0;
+    if (_iargs[ARGS_PATH]) {
+        fmt_name_len = strlen(fbuf->path) + fi->name_max_len;
+    } else {
+        fmt_name_len = strlen(fbuf->name) + fi->name_max_len;
+    }
+
+    
+
+
+
+    
 }
 
-int init_path_list(char * path, struct path_list* pl, struct statis * stats);
 
-int recur_dir(struct path_list* pl, int max_height, struct statis* stats);
-
-int handle_info_dir(struct path_list* cur, struct path_list *end, int cur_height, char* nbuf);
-
-int add_sort_list(char*nbuf, char*name, struct stat *sttmp, struct format_info *fi);
-
-void out_info(struct file_buf * fb, struct format_info *fi);
-
-void out_statis(struct statis* stats);
-
-void start_statis(struct stat sttmp, struct statis * stats);
-
-int out_control(char* path, struct format_info * fi);
-
-void destroy_path_list(struct path_list* pl);
-
-void reset_file_buf_list();
-
-void destroy_file_list(struct file_buf_list * fl);
-
-void format_size(unsigned long long size, char * fstr);
-
-void out_color(struct file_buf * fb, char *pname);
 
 void help(void)
 {
@@ -388,17 +516,6 @@ void help(void)
 
 int main(int argc, char *argv[])
 {
-    _file_cache.end_ind = -1;
-    _fbuf_list_head.count = 0;
-    _fbuf_list_head.next = NULL;
-    _fbuf_list_end = &_fbuf_list_head;
-
-    struct path_list pl;
-    pl.next = NULL;
-    pl.prev = NULL;
-    pl.ind_end = -1;
-
-    struct statis stats;
 
     bzero(&stats, sizeof(stats));
 
