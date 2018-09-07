@@ -3,6 +3,12 @@
 #include <string.h>
 #include <unistd.h>
 
+struct str_list {
+    struct str_list *next;
+    char name[256];
+};
+
+
 #define SWAP(a,b)   tmp=a;a=b;b=tmp;
 
 void qsort_core(void * base, int start, int end,
@@ -31,6 +37,13 @@ int dou_comp(const void *a, const void *b) {
     return (*x ==*y)?0:((*x > *y)?1:-1);
 }
 
+int strlist_comp(const void *a, const void *b) {
+    const struct str_list * sa = a;
+    const struct str_list * sb = b;
+    printf("%s %s\n", sa->name, sb->name);
+    return strcmp(sa->name, sb->name);
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 2) {
@@ -39,6 +52,50 @@ int main(int argc, char *argv[])
     }
 
     int N = argc - 1;
+
+    struct str_list strlhead;
+    struct str_list *sl = NULL, *st = NULL;
+
+    st = &strlhead;
+    st->next = NULL;
+
+    for(int i=1; i<argc; i++) {
+        sl = (struct str_list*)malloc(sizeof(struct str_list));
+        if (sl==NULL) {
+            break;
+        }
+        strcpy(sl->name, argv[i]);
+        st->next = sl;
+        sl->next = NULL;
+        st = st->next;
+    }
+
+    struct str_list **stra = (struct str_list**)malloc(sizeof(struct str_list*)*N);
+    if(stra==NULL){
+        perror("malloc");
+    }
+
+    sl = strlhead.next;
+    int i=0;
+    while(sl) {
+        stra[i++] = sl;
+        sl = sl->next;
+    }
+
+    qsort(stra, sizeof(struct str_list*)*N, sizeof(struct str_list*), strlist_comp);
+
+    for(i=0;i<N;i++) {
+        printf("%s ", stra[i]->name);
+    }printf("\n");
+
+    sl = strlhead.next;
+    while(sl) {
+        st = sl->next;
+        free(sl);
+        sl = st;
+    }
+
+    /*
     char ** qs = (char**)malloc(sizeof(char *) * N);
     if (qs == NULL) {
         perror("malloc");
@@ -49,7 +106,8 @@ int main(int argc, char *argv[])
         qs[i] = argv[i+1];
 
     vqsort(qs, sizeof(char*)*N, sizeof(char*), str_comp);
-
+    
+    
     for(int i=0; i<N; i++)
         printf("%s ", qs[i]);
 
@@ -61,6 +119,8 @@ int main(int argc, char *argv[])
     for(int i=0; i<10;i++)
         printf("%g ", dt[i]);
     printf("\n");
+
+    */
 
     return 0;
 }

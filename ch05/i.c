@@ -82,53 +82,7 @@ void list_type_info() {
 #define MAX_NAME_LEN    2048
 #define PATH_CELL_END   16
 
-#define SWAP(a,b)   tmp=a;a=b;b=tmp;
 
-void qsort_core(void * base, int start, int end,
-    unsigned int size, int (*comp)(const void *, const void *)
-);
-
-void vqsort(void* base, unsigned int nmemb, unsigned int size, 
-    int(*comp)( const void *, const void *)
-) {
-    qsort_core(base, 0, nmemb/size - 1, size, comp);
-}
-
-//paradigm quick sort
-void qsort_core(void * base, int start, int end,
-    unsigned int size, int (*comp)(const void *, const void *)
-) {
-    if (start >= end) {
-        return ;
-    }
-    
-    int med = (end+start)/2;
-    int k = start;
-    int j;
-    char tmp;
-    char * b = base;
-
-    for (int i=0;i<size;i++) {
-        SWAP(b[med*size+i],b[start*size+i]);
-    }
-
-    for(j=start+1;j<=end;j++) {
-        if (comp(b+j*size,b+start*size) < 0) {
-            k += 1;
-            if (k==j)continue;
-            for(int i=0;i<size;i++) {
-                SWAP(b[k*size+i],b[j*size+i]);
-            }
-        }
-    }
-
-    for (int i=0; i<size; i++) {
-        SWAP(b[k*size+i],b[start*size+i]);
-    }
-
-    qsort_core(base, start, k-1, size, comp);
-    qsort_core(base, k+1, end, size, comp);
-}
 
 /*
     save path info 
@@ -154,6 +108,7 @@ struct path_list {
 
 struct path_list *
 init_path_list(struct path_list* pl) {
+   pl->end_ind = 0;
    pl->next = NULL;
    pl->prev = NULL;
    pl->plast = pl;
@@ -187,9 +142,10 @@ add_path_list(struct path_list * pl, char * path, int height) {
     struct path_cell * pcell = NULL;
     struct path_list * ptmp;
 
+    //printf("add path: %s\n", path);
     if (plast->end_ind < PATH_CELL_END) {
         pcell = plast->pce+plast->end_ind;
-        plast->end_ind + 1;
+        plast->end_ind += 1;
     } else {
         ptmp = (struct path_list*)malloc(sizeof(struct path_list));
         if (ptmp==NULL) {
@@ -295,7 +251,6 @@ struct file_buf {
 
 struct file_buf_list {
     struct file_buf fbuf;
-    int use_status;
     struct file_buf_list * next;
 };
 
@@ -307,7 +262,7 @@ struct file_list_cache {
     struct file_buf_list * flast;
 
     //for sort
-    struct file_buf *fba;
+    struct file_buf **fba;
 };
 
 struct format_info {
@@ -320,6 +275,32 @@ struct format_info {
     int out_row;
 };
 
+#define SWAP(a,b)   tmp=a;a=b;b=tmp;
+void qsortfbuf(struct file_buf *d[], int start, int end) {
+    if (start >= end) {
+        return ;
+    }
+
+    int med = (end+start)/2;
+    int i = start;
+    int j = end;
+    struct file_buf *tmp = NULL;
+    
+    SWAP(d[med],d[start]);
+
+    for(j=start+1;j<=end;j++) {
+        if (strcmp(d[j]->name,d[start]->name) < 0) {
+            i++;
+            if (i==j)continue;
+            SWAP(d[i],d[j]);
+        }
+    }
+
+    SWAP(d[i],d[start]);
+
+    qsortfbuf(d, start, i-1);
+    qsortfbuf(d, i+1,end);
+}
 
 void init_flist_cache (struct file_list_cache * flcache) {
     flcache->end_ind = 0;
@@ -376,6 +357,7 @@ int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
         fbtmp = &fl->fbuf;
     }
     memcpy(fbtmp,fbuf, sizeof(struct file_buf));
+
     return 0;
 }
 
@@ -400,39 +382,24 @@ void destroy_flcache(struct file_list_cache *flcache) {
     flcache->fba = NULL;
 }
 
-int fbuf_name_comp(const void *a, const void *b) {
-    struct file_buf const *fa = a;
-    struct file_buf const *fb = b;
-    return strcmp(fa->path, fb->path);
-}
-
-int fbuf_size_comp(const void *a, const void *b) {
-    struct file_buf const *fa = a;
-    struct file_buf const *fb = b;
-
-    return ((fa->st.st_size == fb->st.st_size)
-            ? 0 : (
-                (fa->st.st_size > fb->st.st_size)? 1 : -1
-            )
-        );
-}
 
 int fbuf_sort(struct file_list_cache * flcache, int sort_flag) {
     int total_count = flcache->end_ind + flcache->list_count;
-    flcache->fba = (struct file_buf*)malloc(sizeof(struct file_buf)*total_count);
+    flcache->fba = (struct file_buf**)malloc(sizeof(struct file_buf*)*total_count);
     if (flcache->fba==NULL) {
         return -1;
     }
 
-    int (*comp)(const void *, const void *);
-    if (sort_flag == SORT_BYSIZE) {
-        comp = fbuf_size_comp;
-    } else {
-        comp = fbuf_name_comp;
+    int i=0;
+    for (; i<flcache->end_ind; i++)
+        flcache->fba[i] = flcache->fcache+i;
+
+    struct file_buf_list *fl = flcache->fbhead.next;
+    while(fl) {
+        flcache->fba[i++] = &fl->fbuf;
     }
     
-    vqsort(flcache->fba, sizeof(struct file_buf)*total_count, 
-            sizeof(struct file_buf), comp);
+    qsortfbuf(flcache->fba, 0, total_count-1);
 
     return 0;
 }
@@ -501,8 +468,10 @@ void out_color(struct file_buf * fb, char *pname) {
         printf("\e[2;36m%s",pname);
     else if (S_ISREG(fb->st.st_mode) && access(fb->path,X_OK)==0)
         printf("\e[1;35m%s",pname);
+    else if (S_ISFIFO(fb->st.st_mode))
+        printf("\e[2;33m%s", pname);
     else
-        printf("%s",pname);
+        printf("%s", pname);
     printf("\e[0;m");
 }
 
@@ -520,6 +489,7 @@ void out_info(struct file_buf *fbuf, char *ppath,
 {
     char fmt_str[256] = {'\0'};
     int posi = 0, count=0;
+
 
     if (_iargs.args[ARGS_INO]) {
         count = sprintf(outline + posi, "%-9lu ", fbuf->st.st_ino);
@@ -560,13 +530,14 @@ void out_info(struct file_buf *fbuf, char *ppath,
         posi += count;
     }
 
-    fmt_name_len = strlen(fbuf->name) + fi->name_max_len;
-    sprintf(fmt_str, "%%-%ds ", fmt_name_len);
-    count = sprintf(outline+posi, fmt_str, fbuf->name);
+    fmt_name_len = fi->name_max_len;
+    
+    count = sprintf(outline+posi, "%s", fbuf->name);
     posi += count;
 
     char flag = '\0';
     if (_iargs.args[ARGS_TYPE]) {
+        fmt_name_len += 1;
         if (S_ISDIR(fbuf->st.st_mode))
             flag = TYPE_DIR;
         else if (S_ISLNK(fbuf->st.st_mode))
@@ -581,11 +552,19 @@ void out_info(struct file_buf *fbuf, char *ppath,
             flag = TYPE_BLK;
         else if (S_ISREG(fbuf->st.st_mode) && access(fbuf->path,X_OK)==0)
             flag = TYPE_EXEC;
-        if (flag > 0) {
-            count = sprintf(outline+posi, "%c",flag);
-            posi += count;
+        if (flag =='\0'){
+            flag = ' ';
         }
+        count = sprintf(outline+posi, "%c", flag);
+        posi += count;
     }
+
+    sprintf(fmt_str, "%%-%ldc", fmt_name_len-strlen(fbuf->name));
+    count = sprintf(outline+posi, fmt_str, ' ');
+    posi += count;
+    
+    count = sprintf(outline+posi, " ");
+    posi += count;
 
     if (_iargs.args[ARGS_SIZE] || _iargs.args[ARGS_LONGINFO]) {
         format_size(fbuf->st.st_size, outline+posi);
@@ -610,6 +589,7 @@ int out_flcache(struct file_list_cache *flcache,
 {
 
     char outline[MAX_OUTLINE_LEN+128];
+    char outcolor[MAX_OUTLINE_LEN+128];
     int max_out_len = strlen(path)
                     + fi->uname_max_len
                     + fi->group_max_len
@@ -622,22 +602,39 @@ int out_flcache(struct file_list_cache *flcache,
         return -1;
     }
 
+    if (!_iargs.args[ARGS_PATH]
+        && !_iargs.args[ARGS_REGEX]
+        && !_iargs.args[ARGS_SHOWSTATS]
+
+    ) {
+        printf("%s/:\n", path);
+    }
+
     int max_len;
     max_len = fi->name_max_len + 2;
     fi->out_row = fi->win_col/max_len;
-
+    
     char fmt_str[128] = {'\0'};
     int next_line = 0;
     int total = flcache->end_ind + flcache->list_count;
     
     for(int i=0; i<total; i++) {
-        out_info(&flcache->fba[i], path, fi, outline);
+        out_info(flcache->fba[i], path, fi, outline);
         if (_iargs.args[ARGS_OUTMORE]) {
-            printf("%s\n", outline);
+            if (_iargs.args[ARGS_COLOR]) {
+                out_color(flcache->fba[i], outline);
+                printf("\n");
+            }
+            else
+                printf("%s\n", outline);
         } else {
             sprintf(fmt_str, "%%-%ds ", fi->name_max_len+1);
-
-            printf(fmt_str, outline);
+            if (_iargs.args[ARGS_COLOR]) {
+                sprintf(outcolor, fmt_str, outline);
+                out_color(flcache->fba[i], outcolor);
+            } else {
+                printf(fmt_str, outline);
+            }
             next_line += 1;
             if (next_line >= fi->out_row) {
                 next_line = 0;
@@ -645,6 +642,10 @@ int out_flcache(struct file_list_cache *flcache,
             }
         }
     }
+    if (next_line!=0) {
+        printf("\n");
+    }
+    printf("\n");
 
     return 0;
 }
@@ -736,16 +737,18 @@ int recur_dir(int deep) {
  
         for(i=0; i<pl->end_ind; i++) {
             if (deep > 0 && cur_height > deep)goto end_recur;
-            cur_height = pcell->height + 1;
             pcell = &pl->pce[i];
-            
+            cur_height = pcell->height + 1;
             d = opendir(pcell->path);
             if (!d) {
                 perror("opendir");
                 continue;
             }
             
-            bzero(&_aic.fi, sizeof(struct format_info));
+            _aic.fi.name_max_len = 0;
+            _aic.fi.uname_max_len = 0;
+            _aic.fi.group_max_len = 0;
+            _aic.fi.out_row = 0;
 
             while((rd=readdir(d))!=NULL) {
                 if (!_iargs.args[ARGS_LSALL]
@@ -786,11 +789,12 @@ int recur_dir(int deep) {
                     _aic.fi.group_max_len = len_buf;
 
             }//end readdir
-
+            closedir(d);
             out_flcache(&_aic.flcache, pcell->path, &_aic.fi);
+            add_fbuf_dirs_to_plist(&_aic.flcache, &_pathlist);
             destroy_flcache(&_aic.flcache);
         }//end for
-
+        
         pl = pl->next;
     }
 
@@ -816,7 +820,6 @@ int main(int argc, char *argv[])
         _aic.fi.win_col = _wz.ws_col;
     if (_wz.ws_row > 0)
         _aic.fi.win_row = _wz.ws_row;
-
 
     char path_buffer[MAX_NAME_LEN] = {'\0'};
 
@@ -889,26 +892,38 @@ int main(int argc, char *argv[])
             for(int a=1; a<len_buf; a++){
                 if (argv[i][a]=='a')
                     _iargs.args[ARGS_LSALL] = 1;
-                else if (argv[i][a] == 'i')
+                else if (argv[i][a] == 'i') {
                     _iargs.args[ARGS_INO] = 1;
-                else if (argv[i][a] == 'm')
+                    _iargs.args[ARGS_OUTMORE] = 1;
+                }
+                else if (argv[i][a] == 'm') {
                     _iargs.args[ARGS_MODE] = 1;
-                else if (argv[i][a] == 'p')
+                    _iargs.args[ARGS_OUTMORE] = 1;
+                }
+                else if (argv[i][a] == 'p') {
                     _iargs.args[ARGS_PATH] = 1;
-                else if (argv[i][a] == 's')
+                    _iargs.args[ARGS_OUTMORE] = 1;
+                }
+                else if (argv[i][a] == 's') {
                     _iargs.args[ARGS_SIZE] = 1;
+                    _iargs.args[ARGS_OUTMORE] = 1;
+                }
                 else if (argv[i][a] == 't')
                     _iargs.args[ARGS_STATIS] = 1;
                 else if (argv[i][a] == 'f')
                     _iargs.args[ARGS_TYPE] = 1;
-                else if (argv[i][a] == 'l')
+                else if (argv[i][a] == 'l') {
                     _iargs.args[ARGS_LONGINFO] = 1;
+                    _iargs.args[ARGS_OUTMORE] = 1;
+                }
                 else if (argv[i][a] == 'r') {
                     _iargs.args[ARGS_RECUR] = 1;
                     recur_deep = 0;
                 }
-                else if (argv[i][a] == 'c')
+                else if (argv[i][a] == 'c') {
                     _iargs.args[ARGS_CREATM] = 1;
+                    _iargs.args[ARGS_OUTMORE] = 1;
+                }
                 else { //不匹配则可能是目录/文件名称
                     
                 }
@@ -927,6 +942,8 @@ int main(int argc, char *argv[])
                 if (len_buf > 1 && argv[i][len_buf-1]=='/') {
                     strncpy(path_buffer, argv[i], len_buf-1);
                     path_buffer[len_buf-1] = '\0';
+                } else {
+                    strcpy(path_buffer, argv[i]);
                 }
 
                 add_path_list(&_pathlist, path_buffer, 1);
@@ -952,13 +969,13 @@ int main(int argc, char *argv[])
     }
 
 
-    printf("ok\n");
     if (_pathlist.end_ind == 0 && _aic.flcache.end_ind == 0)
         add_path_list(&_pathlist, ".", 1);
     
     if (_aic.flcache.end_ind > 0) {
         out_flcache(&_aic.flcache, "", &_aic.fi);
     }
+    
 
     recur_dir(recur_deep);
    
