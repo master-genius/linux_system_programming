@@ -507,7 +507,7 @@ void out_info(struct file_buf *fbuf, char *ppath,
     }
     
     if (_iargs.args[ARGS_USRGRP] || _iargs.args[ARGS_LONGINFO]) {
-        sprintf(fmt_str, "%%-%ds %%-%ds", fi->uname_max_len, fi->group_max_len);
+        sprintf(fmt_str, "%%-%ds %%-%ds ", fi->uname_max_len, fi->group_max_len);
         count = sprintf(outline + posi, fmt_str, fbuf->uname, fbuf->group);
         posi += count;
     }
