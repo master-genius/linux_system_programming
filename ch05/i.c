@@ -77,7 +77,8 @@ void list_type_info() {
 #define ARGS_END        32
 
 #define STDOUT_SCRN     1
-#define STDOUT_FIPI     2
+#define STDOUT_FIFO     2
+#define STDOUT_FILE     3
 
 #define MAX_NAME_LEN    2048
 #define PATH_CELL_END   16
@@ -213,9 +214,11 @@ int set_stdout_type(int * stdo) {
     }
 
     if (S_ISFIFO(dst.st_mode))
-        *stdo = STDOUT_FIPI;
-    else
+        *stdo = STDOUT_FIFO;
+    else if (S_ISCHR(dst.st_mode))
         *stdo = STDOUT_SCRN;
+    else
+        *stdo = STDOUT_FILE;
 
     return 0;
 }
@@ -244,7 +247,7 @@ struct file_buf {
     char uname[40];
     char group[40];
     int height;
-    int is_hidden; //如果是正则表达式搜索模式，用于标记是否显示
+    int dir_is_hide; //如果是正则表达式搜索模式，用于标记是否显示，用于目录
     struct stat st;
 };
 
@@ -335,13 +338,13 @@ int set_st_fbuf(struct file_buf *fbuf,
         strcpy(fbuf->uname, pd->pw_name);
         strcpy(fbuf->group, grp->gr_name);
     }
-    fbuf->is_hidden = 0;
+    fbuf->dir_is_hide = 0;
     
     return 0;
 }
 
 void set_fbuf_hide(struct file_buf *fbuf, int hide) {
-    fbuf->is_hidden = hide;
+    fbuf->dir_is_hide = hide;
 }
 
 int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
@@ -634,7 +637,12 @@ int out_flcache(struct file_list_cache *flcache,
     int total = flcache->end_ind + flcache->list_count;
     
     for(int i=0; i<total; i++) {
-        
+        if (S_ISDIR(flcache->fba[i]->st.st_mode)
+            && flcache->fba[i]->dir_is_hide
+        ) {
+            continue;
+        } 
+
         out_info(flcache->fba[i], path, fi, outline);
         
         if (_iargs.args[ARGS_OUTMORE]) {
@@ -733,9 +741,6 @@ void out_statis(struct statis * stats) {
 }
 
 
-void help(void);
-
-
 int recur_dir(int deep) {
     struct path_list *pl = &_pathlist;
     struct path_cell *pcell = NULL;
@@ -751,6 +756,7 @@ int recur_dir(int deep) {
     char pathbuf[MAX_NAME_LEN+1] = {'\0'};
     int len_buf = 0;
     int regex_count = 0;
+    int stats_flag = 0;
     while (pl) {
  
         for(i=0; i<pl->end_ind; i++) {
@@ -769,8 +775,8 @@ int recur_dir(int deep) {
             _aic.fi.out_row = 0;
 
             regex_count = 0;
-
             while((rd=readdir(d))!=NULL) {
+                stats_flag = 1;
                 if (!_iargs.args[ARGS_LSALL]
                     && rd->d_name[0] == '.'
                 ) {
@@ -786,31 +792,53 @@ int recur_dir(int deep) {
                     perror("lstat");
                     continue;
                 }
-
-                set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
-                add_to_flcache(&_aic.flcache, &fbuf);
-
-                if (_iargs.args[ARGS_STATIS]
-                    || _iargs.args[ARGS_SHOWSTATS]
-                ) {
-                    start_statis(&stmp, &_aic.stats);
-                }
-
-                if (_args[ARGS_REGEX]) {
-                    if (S_ISDIR(stmp.st_mode) 
-                        && _iargs.args[ARGS_REGNODIR]
+                if (_iargs.args[ARGS_REGEX]) {
+                    //printf("%s ", rd->d_name);
+                    if (_iargs.args[ARGS_REGNODIR]
+                        && S_ISDIR(stmp.st_mode)
+                    ) { 
+                        /*
+                           不匹配目录，但是类型是目录，
+                           要把目录加入到递归列表但是不显示
+                        */
+                        set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                        set_fbuf_hide(&fbuf, 1);
+                        add_to_flcache(&_aic.flcache, &fbuf);
+                        stats_flag = 0;
+                         
+                    } else if (_iargs.args[ARGS_REGNOFIL]
+                        && !S_ISDIR(stmp.st_mode)
                     ) {
-                        continue;
-                    } else if ((!S_ISDIR(stmp.st_mode)) 
-                        && _iargs.args[ARGS_REGNOFIL]
-                    ) {
+                        stats_flag = 0;
                         continue;
                     }
 
-                    if (regexec(_regcom, rd->d_name, 1, _iargs.regmatch, 0)!=0)
-                        continue;
+                    if (regexec(_iargs.regcom,rd->d_name,1,_iargs.regmatch,0)!=0)
+                    {
+                        stats_flag = 0;
+                        if (S_ISDIR(stmp.st_mode)) {
+                            set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                            set_fbuf_hide(&fbuf, 1);
+                            add_to_flcache(&_aic.flcache, &fbuf);
+                        } 
+                    } else {
+                        set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                        add_to_flcache(&_aic.flcache, &fbuf);
+                        regex_count += 1;
+                    }
 
-                    regex_count++;
+                } else {
+                    set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                    add_to_flcache(&_aic.flcache, &fbuf);
+                }
+
+
+                if ((_iargs.args[ARGS_STATIS]
+                    || _iargs.args[ARGS_SHOWSTATS])
+                    && stats_flag
+                ) {
+                    //printf("stats\n");
+                    start_statis(&stmp, &_aic.stats);
                 }
 
                 len_buf = strlen(rd->d_name);
@@ -830,7 +858,8 @@ int recur_dir(int deep) {
             out_flcache(&_aic.flcache, pcell->path, &_aic.fi);
             add_fbuf_dirs_to_plist(&_aic.flcache, &_pathlist);
             destroy_flcache(&_aic.flcache);
-            printf("\n");
+            if (!_iargs.args[ARGS_REGEX])
+                printf("\n");
         }//end for
         
         pl = pl->next;
@@ -843,6 +872,8 @@ int recur_dir(int deep) {
 
     return 0;
 }
+
+void help(void);
 
 int main(int argc, char *argv[])
 {
@@ -1024,6 +1055,24 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void help() {
+#define HELP_INFO   "\
+    --color : 支持颜色输出\n\
+    --lnk : 如果是软链接输出目标文件\n\
+    --sort : 排序，默认会开启\n\
+    --deep : 递归深度，--deep=[NUMBER]\n\
+    \n\
+    -h : 帮助文档\n\
+    -l : 长格式输出{mode hard-link user group filename size [target]}\n\
+    -c : 创建时间\n\
+    -a : 显示隐藏文件\n\
+    -r : 递归显示目录\n\
+    -s : 文件大小\n\
+    -p : 显示路径\n\
+"
 
+void help() {
+   printf("%s manual\n", PROGRAM_NAME);
+   printf("%s\n", HELP_INFO);
+   printf("  type flag:\n");
+   list_type_info();
 }
