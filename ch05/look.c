@@ -77,7 +77,8 @@ void list_type_info() {
 #define ARGS_END        32
 
 #define STDOUT_SCRN     1
-#define STDOUT_FIPI     2
+#define STDOUT_FIFO     2
+#define STDOUT_FILE     3
 
 #define MAX_NAME_LEN    2048
 #define PATH_CELL_END   16
@@ -213,9 +214,11 @@ int set_stdout_type(int * stdo) {
     }
 
     if (S_ISFIFO(dst.st_mode))
-        *stdo = STDOUT_FIPI;
-    else
+        *stdo = STDOUT_FIFO;
+    else if (S_ISCHR(dst.st_mode))
         *stdo = STDOUT_SCRN;
+    else
+        *stdo = STDOUT_FILE;
 
     return 0;
 }

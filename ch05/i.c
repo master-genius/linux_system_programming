@@ -412,7 +412,7 @@ int fbuf_sort(struct file_list_cache * flcache, int sort_flag) {
 
 int
 add_fbuf_dirs_to_plist(struct file_list_cache* flcache, 
-        struct path_list* plist) 
+        struct path_list* plist)
 {
 
     struct file_buf *fbtmp = NULL;
@@ -567,10 +567,12 @@ void out_info(struct file_buf *fbuf, char *ppath,
         count = sprintf(outline+posi, "%c", flag);
         posi += count;
     }
-
-    //sprintf(fmt_str, "%%-%ldc", fmt_name_len-strlen(fbuf->name));
-    //count = sprintf(outline+posi, fmt_str, ' ');
-    //posi += count;
+    
+    if (_iargs.args[ARGS_OUTMORE]) {
+        sprintf(fmt_str, "%%-%ldc", fmt_name_len-strlen(fbuf->name));
+        count = sprintf(outline+posi, fmt_str, ' ');
+        posi += count;
+    }
     
     count = sprintf(outline+posi, " ");
     posi += count;
