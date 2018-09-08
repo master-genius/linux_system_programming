@@ -760,9 +760,10 @@ int recur_dir(int deep) {
     while (pl) {
  
         for(i=0; i<pl->end_ind; i++) {
-            if (deep > 0 && cur_height > deep)goto end_recur;
             pcell = &pl->pce[i];
-            cur_height = pcell->height + 1;
+            cur_height = pcell->height;
+            if (deep > 0 && cur_height > deep)goto end_recur;
+
             d = opendir(pcell->path);
             if (!d) {
                 perror("opendir");
@@ -801,7 +802,7 @@ int recur_dir(int deep) {
                            不匹配目录，但是类型是目录，
                            要把目录加入到递归列表但是不显示
                         */
-                        set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                        set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height+1);
                         set_fbuf_hide(&fbuf, 1);
                         add_to_flcache(&_aic.flcache, &fbuf);
                         stats_flag = 0;
@@ -817,18 +818,18 @@ int recur_dir(int deep) {
                     {
                         stats_flag = 0;
                         if (S_ISDIR(stmp.st_mode)) {
-                            set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                            set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height+1);
                             set_fbuf_hide(&fbuf, 1);
                             add_to_flcache(&_aic.flcache, &fbuf);
                         } 
                     } else {
-                        set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                        set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height+1);
                         add_to_flcache(&_aic.flcache, &fbuf);
                         regex_count += 1;
                     }
 
                 } else {
-                    set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height);
+                    set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height+1);
                     add_to_flcache(&_aic.flcache, &fbuf);
                 }
 
@@ -1017,7 +1018,6 @@ int main(int argc, char *argv[])
                 } else {
                     strcpy(path_buffer, argv[i]);
                 }
-
                 add_path_list(&_pathlist, path_buffer, 1);
             } else {
                 set_st_fbuf(&fbuf, &stmp, argv[i], NULL, 1);
@@ -1046,7 +1046,7 @@ int main(int argc, char *argv[])
     if (_aic.flcache.end_ind > 0) {
         out_flcache(&_aic.flcache, "", &_aic.fi);
     }
-    
+
     recur_dir(recur_deep);
 
     destroy_path_list(_pathlist.next);
