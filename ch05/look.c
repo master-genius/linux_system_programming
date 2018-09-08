@@ -244,7 +244,6 @@ struct file_buf {
     char uname[40];
     char group[40];
     int height;
-    int is_hidden; //如果是正则表达式搜索模式，用于标记是否显示
     struct stat st;
 };
 
@@ -335,13 +334,8 @@ int set_st_fbuf(struct file_buf *fbuf,
         strcpy(fbuf->uname, pd->pw_name);
         strcpy(fbuf->group, grp->gr_name);
     }
-    fbuf->is_hidden = 0;
     
     return 0;
-}
-
-void set_fbuf_hide(struct file_buf *fbuf, int hide) {
-    fbuf->is_hidden = hide;
 }
 
 int add_to_flcache(struct file_list_cache * flcache, struct file_buf * fbuf) {
@@ -474,9 +468,9 @@ void out_color(struct file_buf * fb, char *pname) {
     if (S_ISDIR(fb->st.st_mode))
         printf("\e[1;34m%s",pname);
     else if(S_ISLNK(fb->st.st_mode))
-        printf("\e[2;36m%s",pname);
-    else if (S_ISREG(fb->st.st_mode) && access(fb->path,X_OK)==0)
         printf("\e[1;35m%s",pname);
+    else if (S_ISREG(fb->st.st_mode) && access(fb->path,X_OK)==0)
+        printf("\e[2;36m%s",pname);
     else if (S_ISFIFO(fb->st.st_mode))
         printf("\e[2;33m%s", pname);
     else
@@ -567,10 +561,11 @@ void out_info(struct file_buf *fbuf, char *ppath,
         count = sprintf(outline+posi, "%c", flag);
         posi += count;
     }
-
-    //sprintf(fmt_str, "%%-%ldc", fmt_name_len-strlen(fbuf->name));
-    //count = sprintf(outline+posi, fmt_str, ' ');
-    //posi += count;
+    if (_iargs.args[ARGS_OUTMORE]) {
+        sprintf(fmt_str, "%%-%ldc", fmt_name_len-strlen(fbuf->name));
+        count = sprintf(outline+posi, fmt_str, ' ');
+        posi += count;
+    }
     
     count = sprintf(outline+posi, " ");
     posi += count;
@@ -794,23 +789,6 @@ int recur_dir(int deep) {
                     start_statis(&stmp, &_aic.stats);
                 }
 
-                if (_args[ARGS_REGEX]) {
-                    if (S_ISDIR(stmp.st_mode) 
-                        && _iargs.args[ARGS_REGNODIR]
-                    ) {
-                        continue;
-                    } else if ((!S_ISDIR(stmp.st_mode)) 
-                        && _iargs.args[ARGS_REGNOFIL]
-                    ) {
-                        continue;
-                    }
-
-                    if (regexec(_regcom, rd->d_name, 1, _iargs.regmatch, 0)!=0)
-                        continue;
-
-                    regex_count++;
-                }
-
                 len_buf = strlen(rd->d_name);
                 if (_aic.fi.name_max_len < len_buf)
                     _aic.fi.name_max_len = len_buf;
@@ -1022,6 +1000,24 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void help() {
+#define HELP_INFO   "\
+    --color : 支持颜色输出\n\
+    --lnk : 如果是软链接输出目标文件\n\
+    --sort : 排序，默认会开启\n\
+    --deep : 递归深度，--deep=[NUMBER]\n\
+    \n\
+    -h : 帮助文档\n\
+    -l : 长格式输出{mode hard-link user group filename size [target]}\n\
+    -c : 创建时间\n\
+    -a : 显示隐藏文件\n\
+    -r : 递归显示目录\n\
+    -s : 文件大小\n\
+    -p : 显示路径\n\
+"
 
+void help() {
+   printf("%s manual\n", PROGRAM_NAME);
+   printf("%s\n", HELP_INFO);
+   printf("  type flag:\n");
+   list_type_info();
 }
