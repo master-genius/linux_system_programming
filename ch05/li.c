@@ -14,8 +14,7 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 
-
-#define PROGRAM_NAME    "look"
+#define PROGRAM_NAME    "li"
 
 #define TYPE_DIR        '/'
 #define TYPE_LNK        '@'
