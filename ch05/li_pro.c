@@ -973,6 +973,12 @@ int main(int argc, char *argv[])
     for(int i=1;i<argc;i++) {
         if (strncmp(argv[i],"--deep=",7)==0) {
             recur_deep = atoi(argv[i]+7);
+            if(recur_deep < 0)
+                recur_deep=1;
+
+            if (recur_deep > 1) {
+                _iargs.args[ARGS_RECUR] = 1;
+            }
         }
         else if (strcmp(argv[i],"--lnk")==0) {
             _iargs.args[ARGS_LINK] = 1;
@@ -1061,7 +1067,8 @@ int main(int argc, char *argv[])
                 }
                 else if (argv[i][a] == 'r') {
                     _iargs.args[ARGS_RECUR] = 1;
-                    recur_deep = 0;
+                    if (recur_deep == 1)
+                        recur_deep = 0;
                 }
                 else if (argv[i][a] == 'c') {
                     _iargs.args[ARGS_CREATM] = 1;
@@ -1102,8 +1109,12 @@ int main(int argc, char *argv[])
     if (_pathlist.end_ind == 0 && _aic.flcache.end_ind == 0)
         add_path_list(&_pathlist, ".", 1);
    
-    if (_pathlist.end_ind == 1 && _aic.flcache.end_ind == 0)
+    if (_pathlist.end_ind == 1 
+        && _aic.flcache.end_ind == 0 
+        && _iargs.args[ARGS_RECUR]==0
+    ) {
         _iargs.out_dir_flag = 0;
+    }
 
     if (_aic.flcache.end_ind > 0) {
         out_flcache(&_aic.flcache, "", &_aic.fi);
