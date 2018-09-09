@@ -939,6 +939,8 @@ int main(int argc, char *argv[])
                 return 2;
             }
             _iargs.args[ARGS_REGEX] = 1;
+            _iargs.args[ARGS_RECUR] = 1;
+            recur_deep = 0;
         }
         else if (strcmp(argv[i], "-h")==0) {
             help();
