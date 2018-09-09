@@ -1,0 +1,24 @@
+#Ubuntu环境开发配置
+
+sudo apt update
+
+#安装vim
+sudo apt install vim -y
+
+#安装tmux
+sudo apt install tmux -y
+
+#安装gcc
+sudo apt install gcc -y
+
+#vim配置
+#把.vimrc 复制到用户主目录
+cp vimrc ~/.vimrc
+
+#复制配置目录
+cp -R  vim  ~/.vim
+
+
+#tmux配置
+cp  tmux.conf  ~/.tmux.conf
+
