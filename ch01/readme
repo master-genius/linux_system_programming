@@ -22,3 +22,8 @@ cp -R  vim  ~/.vim
 #tmux配置
 cp  tmux.conf  ~/.tmux.conf
 
+#Ubuntu18.04下载链接
+http://releases.ubuntu.com/18.04/
+
+#Ubuntu Server18.04下载页面，点击右侧Download
+https://www.ubuntu.com/download/server
