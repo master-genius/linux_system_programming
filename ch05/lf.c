@@ -252,12 +252,11 @@ add_path_list(struct path_list * pl, char * path, int height) {
 
     strcpy(pcell->path, path);
     pcell->is_root = 0;
-    int path_len = strlen(path);
-    if (path_len==1 && path[0]=='/') {
+    pcell->plen = strlen(path);
+    if (pcell->plen==1 && path[0]=='/') {
         pcell->is_root = 1;
     }
 
-    pcell->plen = path_len;
     if (height > 0) {
         pcell->height = height;
     }
