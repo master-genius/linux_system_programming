@@ -217,7 +217,7 @@ void destroy_path_list(struct path_list * pl) {
 }
 
 struct path_list *
-add_path_list(struct path_list * pl, char * path, int height, unsigned long plen);
+add_path_list(struct path_list * pl, char * path, int height);
 
 void
 del_path_list(struct path_list * pl, struct path_list * pnode);
@@ -227,7 +227,7 @@ get_path_list_last(struct path_list * pl);
 
 
 struct path_list *
-add_path_list(struct path_list * pl, char * path, int height, unsigned long plen) {
+add_path_list(struct path_list * pl, char * path, int height) {
     struct path_list * plast =  pl->plast; //get_path_list_last(pl);
     struct path_cell * pcell = NULL;
     struct path_list * ptmp;
@@ -252,12 +252,12 @@ add_path_list(struct path_list * pl, char * path, int height, unsigned long plen
 
     strcpy(pcell->path, path);
     pcell->is_root = 0;
-
-    pcell->plen = plen;
-    if (pcell->plen==1 && path[0]=='/') {
+    int path_len = strlen(path);
+    if (path_len==1 && path[0]=='/') {
         pcell->is_root = 1;
     }
 
+    pcell->plen = path_len;
     if (height > 0) {
         pcell->height = height;
     }
@@ -428,21 +428,8 @@ void init_flist_cache (struct file_list_cache * flcache) {
     flcache->fba = NULL;
 }
 
-struct path_caclt_info {
-    char path[MAX_NAME_LEN];
-    int is_ch;
-    int plen;
-    int out_len;
-};
-
-void set_path_ci(struct path_caclt_info * pci, char *path) {
-    pci->plen = strlen(path);
-    pci->is_ch = is_chinese_name(path, pci->plen);
-    pci->out_len = name_out_len(path, pci->plen);
-}
-
 int set_st_fbuf(struct file_buf *fbuf, 
-        struct stat *st, char * name, struct path_caclt_info *pci, char *path, int height)
+        struct stat *st, char * name, char *path, int height)
 {
     memcpy(&fbuf->st, st, sizeof(struct stat));
     if (name) {
@@ -452,14 +439,11 @@ int set_st_fbuf(struct file_buf *fbuf,
         fbuf->name_outlen = name_out_len(name, fbuf->name_len);
     }
 
-    if (pci){
+    if (path){
         strcpy(fbuf->path, path);
-        fbuf->path_len = pci->plen;
-        fbuf->path_is_ch = pci->is_ch;
-        fbuf->path_outlen = pci->out_len;
-        //fbuf->path_len = strlen(path);
-        //fbuf->path_is_ch = is_chinese_name(path, fbuf->path_len);
-        //fbuf->path_outlen = name_out_len(path, fbuf->path_len);
+        fbuf->path_len = strlen(path);
+        fbuf->path_is_ch = is_chinese_name(path, fbuf->path_len);
+        fbuf->path_outlen = name_out_len(path, fbuf->path_len);
     }
 
     if (height > 0)
@@ -571,8 +555,7 @@ add_fbuf_dirs_to_plist(struct file_list_cache* flcache,
     int total = flcache->list_count + flcache->end_ind;
     for(i=0; i<total; i++) {
         if (S_ISDIR(flcache->fba[i]->st.st_mode))
-            add_path_list(plist, flcache->fba[i]->path, 
-                    flcache->fba[i]->height, flcache->fba[i]->path_len);
+            add_path_list(plist, flcache->fba[i]->path, flcache->fba[i]->height);
     }
 
     return 0;
@@ -917,17 +900,12 @@ void caclt_fi(struct file_buf * fbuf, struct format_info *fi, struct stat *st) {
 
 #define LINUX_NAME_LEN      256
 
-/*
-   傻逼一般的进行优化，使代码变得混乱和臃肿。
-*/
-
 int recur_dir(int deep) {
     struct path_list *pl = &_pathlist;
     struct path_list *pold = NULL;
     struct path_cell *pcell = NULL;
     struct stat stmp;
     struct file_buf fbuf;
-    struct path_caclt_info pci;
 
     DIR * d = NULL;
     struct dirent *rd = NULL;
@@ -978,27 +956,24 @@ int recur_dir(int deep) {
                     perror("lstat");
                     continue;
                 }
-                
-                set_path_ci(&pci, pathbuf);
-
                 if (_iargs.args[ARGS_REGEX]) {
 
                     if (regexec(_iargs.regcom,rd->d_name,1,_iargs.regmatch,0)!=0)
                     {
                         stats_flag = 0;
                         if (S_ISDIR(stmp.st_mode)) {
-                            set_st_fbuf(&fbuf, &stmp, rd->d_name, &pci, pathbuf, cur_height+1);
+                            set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height+1);
                             set_fbuf_hide(&fbuf, 1);
                             add_to_flcache(&_aic.flcache, &fbuf);
                         } 
                     } else {
-                        set_st_fbuf(&fbuf, &stmp, rd->d_name, &pci, pathbuf, cur_height+1);
+                        set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height+1);
                         add_to_flcache(&_aic.flcache, &fbuf);
                         regex_count += 1;
                     }
 
                 } else {
-                    set_st_fbuf(&fbuf, &stmp, rd->d_name, &pci, pathbuf, cur_height+1);
+                    set_st_fbuf(&fbuf, &stmp, rd->d_name, pathbuf, cur_height+1);
                     add_to_flcache(&_aic.flcache, &fbuf);
                 }
 
@@ -1178,17 +1153,14 @@ int main(int argc, char *argv[])
             }
             if (S_ISDIR(stmp.st_mode)) {
                 if (len_buf > 1 && argv[i][len_buf-1]=='/') {
-                    len_buf -= 1;
-                    strncpy(path_buffer, argv[i], len_buf);
+                    strncpy(path_buffer, argv[i], len_buf-1);
                     path_buffer[len_buf-1] = '\0';
                 } else {
                     strcpy(path_buffer, argv[i]);
                 }
-                add_path_list(&_pathlist, path_buffer, 1, len_buf);
+                add_path_list(&_pathlist, path_buffer, 1);
             } else {
-                //struct path_caclt_info pci;
-                //set_path_ci(&pci, argv[i]);
-                set_st_fbuf(&fbuf, &stmp, argv[i], NULL, NULL, 1);
+                set_st_fbuf(&fbuf, &stmp, argv[i], NULL, 1);
                 caclt_fi(&fbuf, &_aic.fi, &stmp);
                 add_to_flcache(&_aic.flcache, &fbuf);
             }
@@ -1198,7 +1170,7 @@ int main(int argc, char *argv[])
     }
 
     if (_pathlist.end_ind == 0 && _aic.flcache.end_ind == 0)
-        add_path_list(&_pathlist, ".", 1, 1);
+        add_path_list(&_pathlist, ".", 1);
    
     if (_pathlist.end_ind == 1 
         && _aic.flcache.end_ind == 0 
