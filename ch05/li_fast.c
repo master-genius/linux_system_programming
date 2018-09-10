@@ -38,8 +38,9 @@ void list_type_info() {
 }
 
 #define SORT_BYNAME     0
-#define SORT_BYCTM      1
-#define SORT_BYSIZE     2
+#define SORT_BYTM       1
+#define SORT_BYCHTM     2
+#define SORT_BYSIZE     3
 
 #define SORT_TY_CELL    'd'
 #define SORT_TY_ALL     'a'
@@ -63,7 +64,7 @@ void list_type_info() {
 #define ARGS_SORT       15
 #define ARGS_BLOCK      16
 #define ARGS_NODIR      17    //not list dir, just file
-#define ARGS_SORTBY     18    //sort type : sort in cell of dir or sort all fil
+#define ARGS_SORTYP     18    //sort type : sort in cell of dir or sort all fil
 #define ARGS_ONELINE    19    //show info in one line
 #define ARGS_LSALL      20
 #define ARGS_INO        21
@@ -81,53 +82,6 @@ void list_type_info() {
 #define MAX_NAME_LEN    2048
 #define PATH_CELL_END   16
 
-
-#define SWAP(a,b)   tmp=a;a=b;b=tmp;
-
-void qsort_core(void * base, int start, int end,
-    unsigned int size, int (*comp)(const void *, const void *)
-);
-
-void vqsort(void* base, unsigned int nmemb, unsigned int size, 
-    int(*comp)( const void *, const void *)
-) {
-    qsort_core(base, 0, nmemb/size - 1, size, comp);
-}
-
-void qsort_core(void * base, int start, int end,
-    unsigned int size, int (*comp)(const void *, const void *)
-) {
-    if (start >= end) {
-        return ;
-    }
-    
-    int med = (end+start)/2;
-    int k = start;
-    int j;
-    char tmp;
-    char * b = base;
-
-    for (int i=0;i<size;i++) {
-        SWAP(b[med*size+i],b[start*size+i]);
-    }
-
-    for(j=start+1;j<=end;j++) {
-        if (comp(b+j*size,b+start*size) < 0) {
-            k += 1;
-            if (k==j)continue;
-            for(int i=0;i<size;i++) {
-                SWAP(b[k*size+i],b[j*size+i]);
-            }
-        }
-    }
-
-    for (int i=0; i<size; i++) {
-        SWAP(b[k*size+i],b[start*size+i]);
-    }
-
-    qsort_core(base, start, k-1, size, comp);
-    qsort_core(base, k+1, end, size, comp);
-}
 
 /*
     这两个函数是简单的修复函数，用于输出格式的时候对齐，
@@ -265,7 +219,6 @@ add_path_list(struct path_list * pl, char * path, int height) {
     return ptmp;
 }
 
-
 void
 del_path_list(struct path_list * pl, struct path_list * pnode) {
     if (pnode == NULL)return ;
@@ -396,29 +349,32 @@ struct format_info {
     int max_nlink_bits;
 };
 
-int fbuf_name_comp(const void *a, const void *b) {
-    return strcmp((*(struct file_buf**)a)->name, (*(struct file_buf**)b)->name );
+#define SWAP(a,b)   tmp=a;a=b;b=tmp;
+void qsortfbuf(struct file_buf *d[], int start, int end) {
+    if (start >= end) {
+        return ;
+    }
+
+    int med = (end+start)/2;
+    int i = start;
+    int j = end;
+    struct file_buf *tmp = NULL;
+    
+    SWAP(d[med],d[start]);
+
+    for(j=start+1;j<=end;j++) {
+        if (strcmp(d[j]->name,d[start]->name) < 0) {
+            i++;
+            if (i==j)continue;
+            SWAP(d[i],d[j]);
+        }
+    }
+
+    SWAP(d[i],d[start]);
+
+    qsortfbuf(d, start, i-1);
+    qsortfbuf(d, i+1,end);
 }
-
-int fbuf_size_comp(const void *a, const void *b) {
-    struct file_buf *fa = *(struct file_buf**)a;
-    struct file_buf *fb = *(struct file_buf**)b;
-
-    return (fa->st.st_size == fb->st.st_size)
-            ? 0 :
-            (fa->st.st_size > fb->st.st_size ? 1 : -1);
-
-}
-
-int fbuf_ctm_comp(const void *a, const void *b) {
-    struct file_buf *fa = *(struct file_buf**)a;
-    struct file_buf *fb = *(struct file_buf**)b;
-
-    return (fa->st.st_ctim.tv_sec == fb->st.st_ctim.tv_sec) ? 0 :
-            (fa->st.st_ctim.tv_sec > fb->st.st_ctim.tv_sec ? 1 : -1);
-
-}
-
 
 void init_flist_cache (struct file_list_cache * flcache) {
     flcache->end_ind = 0;
@@ -529,16 +485,8 @@ int fbuf_sort(struct file_list_cache * flcache, int sort_flag) {
         i++;
         fl = fl->next;
     }
-
-    int (*comp)(const void*, const void*);
-    if (sort_flag == SORT_BYSIZE)
-        comp = fbuf_size_comp;
-    else if (sort_flag == SORT_BYCTM)
-        comp = fbuf_ctm_comp;
-    else
-        comp = fbuf_name_comp;
     
-    vqsort(flcache->fba, sizeof(struct file_buf*)*total_count, sizeof(struct file_buf*), comp);
+    qsortfbuf(flcache->fba, 0, total_count-1);
 
     return 0;
 }
@@ -739,7 +687,7 @@ int out_flcache(struct file_list_cache *flcache,
         return -1;
     }
 
-    if (fbuf_sort(flcache, _iargs.args[ARGS_SORTBY])<0) {
+    if (fbuf_sort(flcache, SORT_BYNAME)<0) {
         return -1;
     }
 
@@ -1036,7 +984,6 @@ int main(int argc, char *argv[])
     int recur_deep = 1;
     unsigned long len_buf = 0;
 
-    _iargs.args[ARGS_SORTBY] = SORT_BYNAME;
     for(int i=1;i<argc;i++) {
         if (strncmp(argv[i],"--deep=",7)==0) {
             recur_deep = atoi(argv[i]+7);
@@ -1067,18 +1014,6 @@ int main(int argc, char *argv[])
             _iargs.args[ARGS_REGNOFIL] = 1;
         else if(strcmp(argv[i],"--no-dir")==0)
             _iargs.args[ARGS_REGNODIR] = 1;
-        else if (strncmp(argv[i],"--sort=",7)==0) {
-            if (strcmp(argv[i]+7, "name")==0) {
-                _iargs.args[ARGS_SORTBY] = SORT_BYNAME;
-            } else if (strcmp(argv[i]+7, "size")==0) {
-                _iargs.args[ARGS_SORTBY] = SORT_BYSIZE;
-            } else if (strcmp(argv[i]+7, "creatm")==0) {
-                _iargs.args[ARGS_SORTBY] = SORT_BYCTM;
-            } else {
-                dprintf(2, "Error: unknow sort type\n");
-                return 1;
-            }
-        }
         else if (strcmp(argv[i],"--regex")==0) {
             _iargs.args[ARGS_OUTMORE] = 1;
             i++;
@@ -1193,9 +1128,8 @@ int main(int argc, char *argv[])
 
 #define HELP_INFO   "\
     --color : 支持颜色输出\n\
-    --lnk   : 如果是软链接输出目标文件\n\
-    --sort  : 排序，默认会开启\n\
-    --sort= : 设置排序方式，支持的参数是size，name，creatm（创建时间）\n\
+    --lnk : 如果是软链接输出目标文件\n\
+    --sort : 排序，默认会开启\n\
     --deep : 递归深度，--deep=[NUMBER]\n\
     \n\
     -h : 帮助文档\n\
