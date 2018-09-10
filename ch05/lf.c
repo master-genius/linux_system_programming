@@ -696,7 +696,8 @@ void out_info(struct file_buf *fbuf, char *ppath,
     }
     
     if (_iargs.args[ARGS_OUTMORE]) {
-        unsigned long int out_len = fmt_name_len - 
+
+        unsigned long int out_len = fmt_name_len + 1 - 
                 (fbuf->name_is_ch ? fbuf->name_outlen : fbuf->name_len);
         sprintf(fmt_str, "%%-%luc", out_len);
         count = sprintf(outline+posi, fmt_str, ' ');
