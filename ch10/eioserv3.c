@@ -55,15 +55,6 @@ pid_t _self_pid;
 int _accpet_count;  //accpet计数
 int __child_count = 0;
 
-//struct epoll_event __events[ACCEPT_MAX_LIMIT];
-
-/*
-struct simple_conn_hash {
-    int hfd[5];
-};
-
-struct simple_conn_hash[ACCEPT_MAX_LIMIT];
-*/
 
 struct msg_block {
     int msg_end;
@@ -387,6 +378,7 @@ int main(int argc, char * argv[]) {
     semop(semid, &mf, 1);
 
     //end sem
+
 
     struct sockaddr_in addr;
 
