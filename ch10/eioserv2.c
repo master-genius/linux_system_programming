@@ -20,9 +20,9 @@
 
 #define MAX_EVENTS  1024        //接收的最大请求
 
-#define BUFF_SIZE   1001        
+#define BUFF_SIZE   16 
 
-#define MAX_MSG_SIZE    8192    //单个消息最大字节数
+#define MAX_MSG_SIZE    128    //单个消息最大字节数
 
 /*
     消息状态 
@@ -31,6 +31,7 @@
 #define RECV_MSG_ERR    1
 #define RECV_MSG_OK     2
 #define RECV_MSG_CLOSE  3
+#define RECV_MSG_OLMT   4
 
 /* 标记父进程和子进程 */
 #define PCS_CHILD   1
@@ -205,7 +206,7 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
     struct sockaddr_in conn;
     socklen_t conn_size = sizeof(conn);
 
-    char buf[BUFF_SIZE];
+    char buf[BUFF_SIZE+1] = {'\0'};
     int recv_count = 0;
     int recv_flag = RECV_MSG_NONE;
 
@@ -238,13 +239,14 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             msg.msg_end = 0;
             msg.msg[0] = '\0';
             recv_flag = RECV_MSG_NONE;
-            while (1) {
-                memset(buf, '\0', BUFF_SIZE);
 
-                recv_count = recv(evt[i].data.fd, buf, BUFF_SIZE-1, 0);
+            while (1) {
+                //memset(buf, '\0', BUFF_SIZE);
+                recv_count = recv(evt[i].data.fd, buf, BUFF_SIZE, 0);
                 if (recv_count < 0) {
                     if (errno==EAGAIN || errno==EWOULDBLOCK) {
-                        recv_flag = RECV_MSG_OK;
+                        if (recv_flag != RECV_MSG_OLMT)
+                            recv_flag = RECV_MSG_OK;
                         break;
                     }
                     recv_flag = RECV_MSG_ERR;
@@ -257,10 +259,14 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
                     break;
                 } else {
                     msg_count += recv_count;
-                    if (msg_count < MAX_MSG_SIZE) {
+                    if (msg_count <= MAX_MSG_SIZE) {
                         recv_flag = RECV_MSG_OK;
                         strcat(msg.msg, buf);
+                    } else {
+                        recv_flag = RECV_MSG_OLMT;
+                        
                     }
+
                 }
             }
             if (recv_flag == RECV_MSG_OK) {
@@ -275,6 +281,11 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
                 ep_modfd(efd, evt[i].data.fd, EPOLLOUT, 1);
             } else if (recv_flag == RECV_MSG_CLOSE) {
                 printf("client closed\n");
+            } else if (recv_flag == RECV_MSG_OLMT) {
+                printf("out of limit\n");
+                strcpy(msg.msg, "Error: out of limit\n");
+                save_msg(evt[i].data.fd, &msg);
+                ep_modfd(efd, evt[i].data.fd, EPOLLOUT, 1);
             } else {
                 printf("Error: recv msg code = %d\n", recv_flag);
             }
