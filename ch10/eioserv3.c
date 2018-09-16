@@ -192,6 +192,44 @@ void close_socket(int fd) {
     _accpet_count -= 1;
 }
 
+int handle_recv_msg(int efd, int fd,  struct msg_block *msg) {
+    int msg_count = 0;
+    int recv_count = 0;
+    char buf[BUFF_SIZE+1] = {'\0'};
+    msg->msg_end = 0;
+    msg->msg[0] = '\0';
+    int recv_flag = RECV_MSG_NONE;
+
+    while (1) {
+        recv_count = recv(fd, buf, BUFF_SIZE, 0);
+        if (recv_count < 0) {
+            if (errno==EAGAIN || errno==EWOULDBLOCK) {
+                if (recv_flag != RECV_MSG_OLMT)
+                    recv_flag = RECV_MSG_OK;
+                break;
+            }
+            recv_flag = RECV_MSG_ERR;
+            close_socket(fd);
+            break;
+        } else if (recv_count == 0) { //connection closed
+            recv_flag = RECV_MSG_CLOSE;
+            ep_delfd(efd, fd);
+            close_socket(fd);
+            break;
+        } else {
+            msg_count += recv_count;
+            if (msg_count <= MAX_MSG_SIZE) {
+                recv_flag = RECV_MSG_OK;
+                strcat(msg->msg, buf);
+            } else {
+                recv_flag = RECV_MSG_OLMT;
+            }
+
+        }
+    }
+    return recv_flag;
+}
+
 void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
     int connfd = 0;
     struct sockaddr_in conn;
@@ -211,58 +249,26 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             }
 
             connfd = accept(lisd, (struct sockaddr*)&conn, &conn_size);
-            
             release_accpet_lock();
 
             if (connfd < 0) {
                 //perror("accept");
                 return ;
             }
-            
             _accpet_count += 1;
 
             printf("%d : get connection...\n", _self_pid);
             ep_addfd(efd, connfd, 1);
         } else if (evt[i].events & EPOLLIN){
             printf("pid:%d get data from %d:\n", _self_pid, evt[i].data.fd);
-            int msg_count = 0;
             struct msg_block msg;
             msg.msg_end = 0;
             msg.msg[0] = '\0';
             recv_flag = RECV_MSG_NONE;
-
-            while (1) {
-                //memset(buf, '\0', BUFF_SIZE);
-                recv_count = recv(evt[i].data.fd, buf, BUFF_SIZE, 0);
-                if (recv_count < 0) {
-                    if (errno==EAGAIN || errno==EWOULDBLOCK) {
-                        if (recv_flag != RECV_MSG_OLMT)
-                            recv_flag = RECV_MSG_OK;
-                        break;
-                    }
-                    recv_flag = RECV_MSG_ERR;
-                    close_socket(evt[i].data.fd);
-                    break;
-                } else if (recv_count == 0) { //connection closed
-                    recv_flag = RECV_MSG_CLOSE;
-                    ep_delfd(efd, evt[i].data.fd);
-                    close_socket(evt[i].data.fd);
-                    break;
-                } else {
-                    msg_count += recv_count;
-                    if (msg_count <= MAX_MSG_SIZE) {
-                        recv_flag = RECV_MSG_OK;
-                        strcat(msg.msg, buf);
-                    } else {
-                        recv_flag = RECV_MSG_OLMT;
-                        
-                    }
-
-                }
-            }
+            recv_flag = handle_recv_msg(efd, evt[i].data.fd, &msg);
+            
             if (recv_flag == RECV_MSG_OK) {
                 //printf("bytes:%ld recieved: %s\n", strlen(msg.msg),msg.msg);
-
                 if (strncmp(msg.msg, "//quit", 6)==0) {
                     ep_delfd(efd, evt[i].data.fd);
                     close_socket(evt[i].data.fd);
@@ -273,12 +279,9 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             } else if (recv_flag == RECV_MSG_CLOSE) {
                 printf("client closed\n");
             } else if (recv_flag == RECV_MSG_OLMT) {
-                printf("out of limit\n");
                 strcpy(msg.msg, "Error: out of limit\n");
                 save_msg(evt[i].data.fd, &msg);
                 ep_modfd(efd, evt[i].data.fd, EPOLLOUT, 1);
-            } else {
-                printf("Error: recv msg code = %d\n", recv_flag);
             }
         }else if (evt[i].events & EPOLLOUT){
             struct event_msg * emsg = get_msg(evt[i].data.fd);
@@ -287,9 +290,8 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             printf("send msg: %s\n", emsg->data.msg);
             send(evt[i].data.fd, (void*)emsg->data.msg, strlen(emsg->data.msg), 0);
             ep_modfd(efd, evt[i].data.fd, EPOLLIN, 1);
-        
         }else {
-            //printf("nothing to do\n");
+        
         }
     }
 }
@@ -379,7 +381,6 @@ int main(int argc, char * argv[]) {
 
     //end sem
 
-
     struct sockaddr_in addr;
 
     int lisd = socket(PF_INET, SOCK_STREAM, 0);
@@ -394,8 +395,16 @@ int main(int argc, char * argv[]) {
 
     int reuse = 1;
     setsockopt(lisd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-
-    addr.sin_port=htons(DEF_PORT);
+    int port = DEF_PORT;
+    if (argc > 1) {
+        if (strncmp(argv[1], "--port=", 7)==0) {
+            port = atoi(argv[1]+7);
+            if (port < 1024 || port > 50000) {
+                port = DEF_PORT;
+            }
+        }
+    }
+    addr.sin_port=htons(port);
     addr.sin_addr.s_addr=inet_addr("127.0.0.1");
     addr.sin_family=AF_INET;
 
@@ -415,7 +424,7 @@ int main(int argc, char * argv[]) {
     if (process_flag == PCS_PARENT) {
         
         _self_pid = getpid();
-        printf("daemon running:%u\n", _self_pid);
+        printf("daemon running:%u at 127.0.0.1:%d\n", _self_pid, port);
 
         signal(SIGINT, parent_handle_sig);
         signal(SIGTERM, parent_handle_sig);
