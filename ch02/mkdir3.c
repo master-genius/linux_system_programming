@@ -139,13 +139,18 @@ int recur_make_parent(char *path, int mode) {
 
     int i = plen-1;
     while(i>0 && path[i]!='/')i--;
+    if (i == 0)
+        goto start_mkdir;
 
     path[i] = '\0';
+
     if (access(path, F_OK) < 0)
         if(try_make_parent(path, mode) < 0)
             return -1;
-    
+
     path[i] = '/';
+
+  start_mkdir:;
     if (mkdir(path, mode) < 0) {
         dprintf(2, "%s:\n", path);
         perror("mkdir");
@@ -154,51 +159,4 @@ int recur_make_parent(char *path, int mode) {
 
     return 0;
 }
-
-/*
-int try_make_parent(char *path, int mode) {
-    int plen = strlen(path);
-    if (path[plen-1] == '/') {
-        path[plen-1] = '\0';
-        plen --;
-    }
-    
-    int i = plen-1;
-
-    while(i>0) {
-        while(i>0 && path[i]!='/')i--;
-        
-        if(i==0) {
-            break;
-        }
-
-        path[i] = '\0';
-        if (access(path, F_OK|X_OK)==0) {
-            path[i] = '/';
-            break;
-        }
-    }
-    
-    return level_make_dir(path, i, plen-1);
-}
-
-int level_make_dir(char *path, int start, int end, int mode) {
-    int i = start;
-
-    while (i < end) {
-        while(i < end && path[i]!='/')i++;
-        if (i==end) {
-            break;
-        }
-        path[i] = '\0';
-        if (mkdir(path, mode) < 0) {
-            perror("mkdir");
-            return -1;
-        }
-        path[i] = '/';
-    }
-    
-    return 0;
-}
-*/
 
