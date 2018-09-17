@@ -5,6 +5,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define ARGS_MKPARENT   0
+
+#define ARGS_END        8
+
+char _args[ARGS_END] = {'\0'};
+
 void help(void)
 {
     char *help_info[] = {
@@ -25,17 +31,31 @@ void help(void)
     }
 }
 
+int try_make_parent(char *path, int mode);
+
+int recur_make_parent(char *path, int mode);
+
 int main(int argc, char *argv[])
 {
     if (argc<2) {
         dprintf(2,"Error:less DIR_NAME\n");
         return -1;
     }
+
     int mode_flag = 0;
     int mode = 0755;
     int i;
     int mode_buf = 0;
     char tmp;
+    int dir_count = 0;
+
+    int *dir_ind = (int*)malloc(sizeof(int)*(argc-1));
+    if(dir_ind == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    for(int i=0; i<argc-1; i++)
+        dir_ind[i] = 0;
 
     for(i=1;i<argc;i++) {
         if (strcmp(argv[i],"--help")==0) {
@@ -44,28 +64,37 @@ int main(int argc, char *argv[])
         } else if (strncmp(argv[i],"--mode=",7)==0) {
             if (mode_flag > 0) {
                 dprintf(2,"Error: too many --mode\n");
+                free(dir_ind);
                 return 1;
             }
 
             if (strlen(argv[i]+7)!=3) {
                 dprintf(2, "Error: mode is wrong\n");
+                free(dir_ind);
                 return -1;
             }
             for (int k=0;k<3;k++) {
                 tmp = argv[i][7+k];
                 if (tmp < '0' || tmp > '7') {
                     dprintf(2, "Error: mode number must in [0,7]\n");
+                    free(dir_ind);
                     return -1;
                 }
                 mode_buf += (tmp-48)*(1<<(3*(2-k)));
             }
 
             mode_flag = i;
+        } else if (strcmp(argv[i], "-p") == 0) {
+            _args[ARGS_MKPARENT] = 1;
+        } else {
+            dir_ind[i-1] = 1;
+            dir_count ++;
         }
     }
 
-    if (mode_flag>0 && argc==2) {
+    if (dir_count == 0) {
         dprintf(2,"Error: less DIR_NAME\n");
+        free(dir_ind);
         return -1;
     }
 
@@ -74,14 +103,102 @@ int main(int argc, char *argv[])
 
     for (i=1;i<argc;i++) {
         
-        if (i==mode_flag)continue;
+        if (dir_ind[i-1]==0)continue;
 
         if (mkdir(argv[i],mode) < 0) {
-            perror("mkdir");
-            return -1;
+            if (_args[ARGS_MKPARENT]) {
+                if (try_make_parent(argv[i], mode) < 0) {
+                    free(dir_ind);
+                    return -1;
+                }
+            } else {
+                perror("mkdir");
+                return -1;
+            }
         }
+    }
+
+    free(dir_ind);
+
+    return 0;
+}
+
+int try_make_parent(char *path, int mode) {
+    int plen = strlen(path);
+    if (plen > 0 && path[plen-1]=='/')
+        path[plen-1] = '\0';
+
+    return recur_make_parent(path, mode);
+}
+
+int recur_make_parent(char *path, int mode) {
+    
+    int plen = strlen(path);
+    if(plen<=0 || access(path, F_OK)==0)
+        return 0;
+
+    int i = plen-1;
+    while(i>0 && path[i]!='/')i--;
+
+    path[i] = '\0';
+    if (access(path, F_OK) < 0)
+        if(try_make_parent(path, mode) < 0)
+            return -1;
+    
+    path[i] = '/';
+    if (mkdir(path, mode) < 0) {
+        dprintf(2, "%s:\n", path);
+        perror("mkdir");
+        return -1;
     }
 
     return 0;
 }
+
+/*
+int try_make_parent(char *path, int mode) {
+    int plen = strlen(path);
+    if (path[plen-1] == '/') {
+        path[plen-1] = '\0';
+        plen --;
+    }
+    
+    int i = plen-1;
+
+    while(i>0) {
+        while(i>0 && path[i]!='/')i--;
+        
+        if(i==0) {
+            break;
+        }
+
+        path[i] = '\0';
+        if (access(path, F_OK|X_OK)==0) {
+            path[i] = '/';
+            break;
+        }
+    }
+    
+    return level_make_dir(path, i, plen-1);
+}
+
+int level_make_dir(char *path, int start, int end, int mode) {
+    int i = start;
+
+    while (i < end) {
+        while(i < end && path[i]!='/')i++;
+        if (i==end) {
+            break;
+        }
+        path[i] = '\0';
+        if (mkdir(path, mode) < 0) {
+            perror("mkdir");
+            return -1;
+        }
+        path[i] = '/';
+    }
+    
+    return 0;
+}
+*/
 
