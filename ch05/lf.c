@@ -553,6 +553,11 @@ add_fbuf_dirs_to_plist(struct file_list_cache* flcache,
     int i=0;
     int total = flcache->list_count + flcache->end_ind;
     for(i=0; i<total; i++) {
+        if (strcmp(flcache->fba[i]->name,".")==0
+            || strcmp(flcache->fba[i]->name, "..")==0
+        ) {
+            continue;
+        }
         if (S_ISDIR(flcache->fba[i]->st.st_mode))
             add_path_list(plist, flcache->fba[i]->path, flcache->fba[i]->height);
     }
