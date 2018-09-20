@@ -123,8 +123,19 @@ del_path_list(struct path_list * pl, struct path_list * pnode) {
     free(pnode);
 }
 
-int recur_set_mode(int deep) {
+int recur_set_mode(struct path_list* pl, int deep) {
+    
+    struct path_list *p = pl;
+    struct path_list * pold = NULL;
 
+    while (p!=NULL) {
+        
+        for(int i=0; i<p->end_ind; i++) {
+        
+        } //end for
+
+        p = p->next;
+    } //en while
 }
 
 
