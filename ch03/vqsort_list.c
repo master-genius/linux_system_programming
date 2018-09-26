@@ -30,14 +30,9 @@ int str_comp(const void *a, const void *b) {
 int strlist_comp(const void *a, const void *b) {
     const struct str_list * sa = *(struct str_list **)a;
     const struct str_list * sb = *(struct str_list **)b;
-    printf("%s %s\n", sa->name, sb->name);
     return strcmp(sa->name, sb->name);
 }
 
-void list_void_out(void *a) {
-    struct str_list * la = a;
-    printf("%s\n",la->name);
-}
 
 int main(int argc, char *argv[])
 {
@@ -77,7 +72,6 @@ int main(int argc, char *argv[])
         sl = sl->next;
     }
 
-    list_void_out(stra[0]);
 
     vqsort(stra, sizeof(struct str_list*)*N, sizeof(struct str_list*), strlist_comp);
 
@@ -115,7 +109,6 @@ void qsort_core(void * base, int start, int end,
     for(j=start+1;j<=end;j++) {
         if (comp(b+j*size,b+start*size) < 0) {
             k += 1;
-            if (k==j)continue;
             for(int i=0;i<size;i++) {
                 SWAP(b[k*size+i],b[j*size+i]);
             }

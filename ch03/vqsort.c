@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
         sl = sl->next;
     }
 
-    qsort(stra, sizeof(struct str_list*)*N, sizeof(struct str_list*), strlist_comp);
+    vqsort(stra, sizeof(struct str_list*)*N, sizeof(struct str_list*), strlist_comp);
 
     for(i=0;i<N;i++) {
         printf("%s ", stra[i]->name);
@@ -145,7 +145,6 @@ void qsort_core(void * base, int start, int end,
     for(j=start+1;j<=end;j++) {
         if (comp(b+j*size,b+start*size) < 0) {
             k += 1;
-            if (k==j)continue;
             for(int i=0;i<size;i++) {
                 SWAP(b[k*size+i],b[j*size+i]);
             }
