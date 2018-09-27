@@ -22,11 +22,6 @@ void vqsort(void* base, unsigned int nmemb, unsigned int size,
 }
 
 
-int str_comp(const void *a, const void *b) {
-    return strcmp(*(char**)a, *(char**)b);
-}
-
-
 int strlist_comp(const void *a, const void *b) {
     const struct str_list * sa = *(struct str_list **)a;
     const struct str_list * sb = *(struct str_list **)b;
