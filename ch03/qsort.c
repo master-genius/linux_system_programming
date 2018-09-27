@@ -5,7 +5,7 @@
 
 #define SWAP(a,b)   tmp=a;a=b;b=tmp;
 
-void qsorti(int *d, int start, int end, int deep) {
+void qsorti(int *d, int start, int end) {
     if (start >= end) {
         return ;
     }
@@ -14,8 +14,6 @@ void qsorti(int *d, int start, int end, int deep) {
     int i = start;
     int j = end;
     int tmp = 0;
-    
-    printf("deep: %d; %d -> %d\n", deep, med, d[med]);
 
     SWAP(d[med],d[start]);
 
@@ -29,12 +27,8 @@ void qsorti(int *d, int start, int end, int deep) {
 
     SWAP(d[i],d[start]);
 
-    for (int k=start; k<=end; k++)
-        printf("%d ", d[k]);
-    printf("\n\n");
-
-    qsorti(d, start, i-1, deep+1);
-    qsorti(d, i+1,end, deep+1);
+    qsorti(d, start, i-1);
+    qsorti(d, i+1,end);
 }
 
 int main(int argc, char *argv[])
@@ -56,7 +50,7 @@ int main(int argc, char *argv[])
         nms[i] = atoi(argv[i+1]);
     }
 
-    qsorti(nms, 0, N-1, 1);
+    qsorti(nms, 0, N-1);
 
     for (int i=0;i<N;i++) {
         printf("%d ", nms[i]);
