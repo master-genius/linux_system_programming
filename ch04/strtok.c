@@ -18,9 +18,9 @@ int main(int argc, char *agrv[]) {
         printf("%s\n", sub);
         sub = strtok(NULL, dem);
     }
-    for(int i=0; i<strend; i++)
-        printf("%d ", src[i]);
-    printf("\n");
+//    for(int i=0; i<strend; i++)
+//        printf("%d ", src[i]);
+//    printf("\n");
 
     return 0;
 }
