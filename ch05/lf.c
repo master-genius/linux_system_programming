@@ -875,7 +875,7 @@ void out_statis(struct statis * stats) {
         printf("%13s : %llu\n", "total count",stats->total_count);
         printf("%13s : %s\n", "total size",size_str);
     }
-    printf("%13s : %s\n","total file size",size_str+32);
+    printf("%13s : %s %llu bytes\n","total file size",size_str+32, stats->file_total_size);
 }
 
 void caclt_fi(struct file_buf * fbuf, struct format_info *fi, struct stat *st) {
@@ -931,7 +931,9 @@ int recur_dir(int deep) {
 
             d = opendir(pcell->path);
             if (!d) {
+                dprintf(2, "[%s] ", pcell->path);
                 perror("opendir");
+                //goto end_recur;
                 continue;
             }
             
@@ -994,7 +996,9 @@ int recur_dir(int deep) {
 
             }//end readdir
             closedir(d);
-            out_flcache(&_aic.flcache, pcell->path, &_aic.fi);
+            if (_iargs.args[ARGS_SHOWSTATS]==0)
+                out_flcache(&_aic.flcache, pcell->path, &_aic.fi);
+
             add_fbuf_dirs_to_plist(&_aic.flcache, &_pathlist);
             destroy_flcache(&_aic.flcache);
             if (!_iargs.args[ARGS_REGEX])

@@ -159,7 +159,7 @@ int recur_make_parent(char *path, int mode) {
     path[i] = '\0';
 
     if (access(path, F_OK) < 0)
-        if(try_make_parent(path, mode) < 0)
+        if(recur_make_parent(path, mode) < 0)
             return -1;
 
     path[i] = '/';
