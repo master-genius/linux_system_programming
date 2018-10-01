@@ -14,7 +14,6 @@ int matchreg(char *, char *);
 int matchchar(char, char *, char *);
 
 int match(char *regex, char *text) {
-
     if (regex[0] == '^')
         return matchreg(regex+1, text);
     else if(strchr(REGEX_CHAR, regex[0]) == NULL) {
@@ -116,8 +115,6 @@ int main(int argc, char *argv[]) {
 
     if (S_ISFIFO(st.st_mode) )
         std_in_type = STD_IN_FIFO;
-
-
 
     char buffer[BUF_LEN] = {'\0'};
     int len;
