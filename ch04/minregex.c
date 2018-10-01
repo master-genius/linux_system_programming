@@ -37,6 +37,12 @@ int matchreg(char *regex, char *text) {
             }
         } else {
             char c = regex[0];
+            while(*text != '\0') {
+                if (matchreg(regex+2, text)) {
+                    while()
+                }
+                text++;
+            }
 
             while ( *text!='\0' && *text==c ) {
                 text++;
