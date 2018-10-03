@@ -7,8 +7,8 @@
 #include <fcntl.h>
 
 void out_st_info(char * path, struct stat * st) {
-    printf("%s -> size: %lu bytes\n", path, st->st_size);
-    printf("    i-node: %-9lu  hard link: %-2lu ", st->st_ino, st->st_nlink);
+    printf("%s\n",path);
+    printf("    size: %lu bytes  i-node: %-9lu  hard link: %-2lu \n", st->st_size, st->st_ino, st->st_nlink);
 
     char * ptype = "";
     switch (st->st_mode & S_IFMT) {
@@ -38,7 +38,7 @@ void out_st_info(char * path, struct stat * st) {
             break;
     };
 
-    printf("%s\n",ptype);
+    printf("    %s  dev: %lu  rdev: %lu\n",ptype, st->st_dev, st->st_rdev);
 }
 
 int main(int argc, char *argv[])
