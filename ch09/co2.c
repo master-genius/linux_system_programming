@@ -6,22 +6,40 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <time.h>
 
-#define CO_BUFFER_LEN      4096
+#define HELP_INFO   "\
+dup : copy file or dir to another path\n\
+    unlike command cp , you don't need -R to copy a dir.\n\
+    usage : dup  [FILE_NAME or DIR_NAME] [TARGET_PATH]\n\
+    example :\n\n\
+    dup  a  b\n\
+        copy a to b\n\
+        \n\
+    dup  a  x/b\n\
+        copy a to dir x and rename a to b\n\
+        \n\
+    dup  a  b  c/  x/ \n\
+        copy file a b and dir c to dir x/,if x not exists, x will be created.\n\
+        \n\
+    dup  c/  x\n\
+        if x exists, c/ will into x, if x not exists, x will be created,\n\
+        then, copy all files from c/ to x/.\n\
+"
+
+void help(void) {
+    printf("%s\n", HELP_INFO);
+}
+
+#define CO_BUFFER_LEN      8192
 
 #define MAX_NAME_LEN        2048
 
-
-struct path_list {
-    char path[MAX_NAME_LEN];
-    struct path_list *next;
-    struct path_list *prev;
-    struct path_list *last;
-};
-
-
-
-
+/*
+    设计方式：
+        master进程只负责创建目录，并把文件路径和目标路径放进消息队列。
+        两个子进程负责监听消息队列，从队列里获取数据并进行复制。
+*/
 
 int copy_file_core(char *src, char *dest);
 
@@ -83,7 +101,7 @@ int copy_file_core(char *src, char *dest) {
         }
       end_copy:;
         close(fo);
-        fsync(fd);
+        //fsync(fd);
         close(fd);
     } else if (S_ISFIFO(st.st_mode)) {
         if (mknod(dest, S_IFIFO|(0777 & st.st_mode), 0) < 0) {
@@ -248,8 +266,8 @@ int copy_control(char *src, char *dest) {
 int main(int argc, char *argv[]) {
 
     if (argc < 3) {
-        dprintf(2, "Error: less arguments\n");
-        return -1;
+        help();
+        return 0;
     }
 
     char *dest = argv[argc-1];
