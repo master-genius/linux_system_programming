@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <time.h>
 
@@ -13,6 +14,17 @@
 #define CO_BUFFER_LEN      4096
 
 #define MAX_NAME_LEN        2048
+
+void handle_sig(int sig) {
+    switch (sig) {
+        case SIGINT:
+        case SIGTERM:
+        case SIGALRM:
+            
+            break;
+        default:;
+    }
+}
 
 int copy_file_core(char *src, char *dest);
 
