@@ -42,6 +42,8 @@
 #define ACCEPT_MAX_LIMIT    MAX_EVENTS/CHILD_COUNT
 
 
+#define SEM_V_KEY     1024
+
 /*
     System V信号量要使用的结构，需要自己定义。
 */
@@ -100,6 +102,40 @@ void child_handle_sig(int sig) {
 
         exit(0);
     }
+}
+
+int init_accept_lock() {
+
+    key_t semk = SEM_V_KEY;
+    int semid;
+    semid = semget(semk, 1, IPC_CREAT|0666);
+    if ( semid < 0 ) {
+        perror("semget");
+        return -1;
+    }
+    _save_semid = semid;
+
+    union semun semarg;
+
+    struct sembuf mf;
+    mf.sem_num = 0;
+    mf.sem_op = 1;
+    mf.sem_flg = SEM_UNDO;
+
+    semarg.val = 1;
+    semarg.buf = NULL;
+    semarg.array = NULL;
+    semarg.__buf = NULL;
+
+    if (semctl(semid, 0, SETVAL, semarg)<0) {
+        semctl(semid, 0, IPC_RMID);
+        perror("semctl");
+        return 2;
+    }
+
+    semop(semid, &mf, 1);
+
+    return 0;
 }
 
 int try_accpet_lock() {
@@ -261,7 +297,7 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             }
             _accpet_count += 1;
 
-            printf("%d : get connection...\n", _self_pid);
+            printf("%d : get connection -- sock : %d...\n", _self_pid, connfd);
             ep_addfd(efd, connfd, 1);
         } else if (evt[i].events & EPOLLIN){
             printf("pid:%d get data from %d:\n", _self_pid, evt[i].data.fd);
@@ -354,35 +390,9 @@ int main(int argc, char * argv[]) {
     int process_flag = PCS_PARENT;
 
     //start to set semaphore
-    key_t semk = 1024;
-    int semid;
-    semid = semget(semk, 1, IPC_CREAT|0666);
-    if ( semid < 0 ) {
-        perror("semget");
-        return 1;
+    if (init_accept_lock() < 0) {
+        return -1;
     }
-    _save_semid = semid;
-
-    union semun semarg;
-
-    struct sembuf mf;
-    mf.sem_num = 0;
-    mf.sem_op = 1;
-    mf.sem_flg = SEM_UNDO;
-
-    semarg.val = 1;
-    semarg.buf = NULL;
-    semarg.array = NULL;
-    semarg.__buf = NULL;
-
-    if (semctl(semid, 0, SETVAL, semarg)<0) {
-        semctl(semid, 0, IPC_RMID);
-        perror("semctl");
-        return 2;
-    }
-
-    semop(semid, &mf, 1);
-
     //end sem
 
     struct sockaddr_in addr;

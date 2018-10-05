@@ -17,6 +17,15 @@
 #include <signal.h>
 #include <semaphore.h>
 
+/*
+    这个测试程序使用了POSIX标准的信号量接口，最开始使用了匿名信号量，但是并不能实现互斥。
+    sem_init初始化的匿名信号量只能在多线程中使用，多进程之间一定要使用共享的变量，比如，
+    使用共享内存，这里使用了sem_open创建了命名信号量。
+
+    多进程之间的互斥信号量，使用System V标准的接口最好。
+
+*/
+
 #define DEF_PORT    2018
 
 #define MAX_EVENTS  1024        //接收的最大请求
@@ -106,8 +115,6 @@ void child_handle_sig(int sig) {
         exit(0);
     }
 }
-
-
 
 
 //设置套接字的文件描述符为非阻塞模式
