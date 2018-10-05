@@ -15,6 +15,9 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <signal.h>
+#include <time.h>
+#include <sys/time.h>
+
 
 #define DEF_PORT    2018
 
@@ -41,6 +44,7 @@
 
 #define ACCEPT_MAX_LIMIT    MAX_EVENTS/CHILD_COUNT
 
+#define NEW_SOCK_END        ACCEPT_MAX_LIMIT+10
 
 #define SEM_V_KEY     1024
 
@@ -74,6 +78,94 @@ struct event_msg {
 
 //全局信息存储
 struct event_msg _evtmsg[ACCEPT_MAX_LIMIT];
+
+struct new_sock_list {
+    int fd;
+    time_t conn_time;
+    int inuse;
+};
+struct new_sock_list _nsocklist[NEW_SOCK_END];
+
+void init_new_sock_list (struct new_sock_list *nsl) {
+    for(int i=0; i<NEW_SOCK_END; i++) {
+        nsl[i].fd = 0;
+        nsl[i].inuse = 0;
+        nsl[i].conn_time = 0;
+    }
+}
+
+int add_new_sock_list(struct new_sock_list *nsl, int fd, time_t t) {
+    
+    int ind = fd % NEW_SOCK_END;
+
+    if (nsl[ind].inuse == 1) {
+        for(int i=ind+1; i<NEW_SOCK_END; i++) {
+            if (nsl[i].inuse == 0) {
+                ind = i;
+                goto set_inuse;
+            }
+        }
+
+        for(int i=0; i<ind; i++) {
+            if (nsl[i].inuse == 0) {
+                ind = i;
+                goto set_inuse;
+            }
+        }
+        return -1;
+    }
+  set_inuse:;
+    nsl[ind].inuse = 1;
+    nsl[ind].conn_time = t;
+    nsl[ind].fd = fd;
+    return 0;
+}
+
+void del_new_sock_list(struct new_sock_list *nsl, int fd) {
+
+    int ind = fd % NEW_SOCK_END;
+
+    if (nsl[ind].fd == fd && nsl[ind].inuse == 1) {
+        nsl[ind].inuse = 0;
+        nsl[ind].fd = -1;
+    } else {
+        for (int i=fd+1; i<NEW_SOCK_END; i++) {
+            if (nsl[i].fd == fd && nsl[i].inuse == 1) {
+                nsl[i].inuse = 0;
+                nsl[i].fd = -1;
+                return ;
+            }
+        }
+        for(int i=0; i<ind; i++) {
+            if (nsl[i].fd == fd && nsl[i].inuse == 1) {
+                nsl[i].inuse = 0;
+                nsl[i].fd = -1;
+                return ;
+            }
+        }
+    }
+
+}
+
+void del_new_sock_ind(struct new_sock_list *nsl, int ind) {
+    nsl[ind].inuse = 0;
+    nsl[ind].fd = -1;
+}
+
+time_t get_nsl_time(struct new_sock_list *nsl, int fd) {
+    for(int i=0; i<NEW_SOCK_END; i++) {
+        if (fd == nsl[i].fd && nsl[i].inuse == 1) {
+            return nsl[i].conn_time;
+        }
+    }
+}
+
+int check_if_timeout(struct new_sock_list *nsl, int fd, int timeout) {
+    time_t nt;
+    time(&nt);
+    time_t t = get_nsl_time(nsl, fd);
+    return ((nt - t) >= timeout);
+}
 
 
 void parent_handle_sig(int sig) {
@@ -130,7 +222,7 @@ int init_accept_lock() {
     if (semctl(semid, 0, SETVAL, semarg)<0) {
         semctl(semid, 0, IPC_RMID);
         perror("semctl");
-        return -1;
+        return 2;
     }
 
     semop(semid, &mf, 1);
@@ -278,6 +370,7 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
     char buf[BUFF_SIZE+1] = {'\0'};
     int recv_count = 0;
     int recv_flag = RECV_MSG_NONE;
+    struct timeval tmv;
 
     for (int i=0; i<number; i++) {
         if (lisd == evt[i].data.fd) {
@@ -297,9 +390,22 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
             }
             _accpet_count += 1;
 
+            //tmv.tv_sec = 3;
+            //tmv.tv_usec = 0;
+            //if (setsockopt(connfd, SOL_SOCKET, SO_RCVTIMEO, &tmv, sizeof(tmv)) < 0)
+                //perror("setsockopt");
+            //新建立连接加入到struct new_sock_list用于标记
+            if(add_new_sock_list(_nsocklist, connfd, time(NULL)) < 0) {
+                close_socket(connfd);
+                return ;
+            }
+
             printf("%d : get connection -- sock : %d...\n", _self_pid, connfd);
             ep_addfd(efd, connfd, 1);
         } else if (evt[i].events & EPOLLIN){
+            
+            del_new_sock_list(_nsocklist, evt[i].data.fd);
+
             printf("pid:%d get data from %d:\n", _self_pid, evt[i].data.fd);
             struct msg_block msg;
             msg.msg_end = 0;
@@ -338,6 +444,10 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
 
 int child_server(int lisd) {
 
+    //_nsocklist.end_ind = 0;
+
+    init_new_sock_list(_nsocklist);
+
     _self_pid = getpid();
     signal(SIGINT, SIG_IGN);
     signal(SIGTERM, child_handle_sig);
@@ -356,13 +466,31 @@ int child_server(int lisd) {
     ep_addfd(efd, lisd, 1);
 
     int event_count = 0;
+    int sock_buf = 0;
     while(1) {
-        event_count = epoll_wait(efd, events, ACCEPT_MAX_LIMIT, -1);
+        event_count = epoll_wait(efd, events, ACCEPT_MAX_LIMIT, 50);
         if (event_count < 0) {
             perror("epoll_wait");
             break;
         }
-        event_et(events, event_count, efd, lisd);
+        if (event_count > 0)
+            event_et(events, event_count, efd, lisd);
+
+        //检测是否有新连接超时未发送验证消息
+        for(int i=0; i<NEW_SOCK_END; i++) {
+            if (_nsocklist[i].inuse == 1 && _nsocklist[i].fd > 0) {
+                if (check_if_timeout(_nsocklist, _nsocklist[i].fd, 3) == 0)
+                    continue;
+                
+                sock_buf = _nsocklist[i].fd;
+
+                del_new_sock_ind(_nsocklist, i);
+
+                ep_delfd(efd, sock_buf);
+                printf("close socket:%d\n", sock_buf);
+                close_socket(sock_buf);
+            }
+        }
     }
     
     close(lisd);
