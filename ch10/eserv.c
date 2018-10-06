@@ -476,7 +476,10 @@ int child_server(int lisd) {
         if (event_count > 0)
             event_et(events, event_count, efd, lisd);
 
-        //检测是否有新连接超时未发送验证消息
+        /*
+            检测是否有新连接超时未发送验证消息，要求连接在建立后3秒内
+            要发送一条验证消息，否则就关闭连接。
+        */
         for(int i=0; i<NEW_SOCK_END; i++) {
             if (_nsocklist[i].inuse == 1 && _nsocklist[i].fd > 0) {
                 if (check_if_timeout(_nsocklist, _nsocklist[i].fd, 3) == 0)
