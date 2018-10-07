@@ -444,8 +444,6 @@ void event_et(struct epoll_event *evt, int number, int efd, int lisd) {
 
 int child_server(int lisd) {
 
-    //_nsocklist.end_ind = 0;
-
     init_new_sock_list(_nsocklist);
 
     _self_pid = getpid();
