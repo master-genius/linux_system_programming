@@ -22,7 +22,12 @@ int set_nonblocking(int fd) {
 
 int main(int argc, char *argv[]) {
 
-    int kfd = open(KEY_EVENT_FILE, O_RDONLY);
+    char *kfile = KEY_EVENT_FILE;
+    if (argc > 1) {
+        kfile = argv[1];
+    }
+
+    int kfd = open(kfile, O_RDONLY);
     if (kfd < 0) {
         perror("open");
         return -1;
@@ -38,7 +43,6 @@ int main(int argc, char *argv[]) {
         count = read(kfd, &kt, sizeof(kt));
 
         if (count < 0 && errno == EAGAIN) {
-            //printf("shit\n");
             continue;
         } else if (count > 0) {
             if (kt.type == EV_KEY) {
@@ -46,9 +50,7 @@ int main(int argc, char *argv[]) {
                     printf("key %d %s\n", kt.code, kt.value?"pressed":"released");
                     if (kt.code == KEY_ESC)
                         break;
-                } else {
-                    printf("fuck\n");
-                }
+                } 
             }
         } else {
             perror("read");
