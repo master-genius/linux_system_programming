@@ -36,9 +36,11 @@ int init_dev_file() {
     char *ep;
     while (1) {
         p = fgets(_dev_struct[i], DEV_LINE_SIZE, f);
-        if (p == NULL) {
+        if (errno && p == NULL) {
             errcode = -1;
             goto end_dev;
+        }else if (p == NULL) {
+            break;
         }
         if (strcmp(p, "\n") == 0) {
             i=0;
@@ -100,11 +102,63 @@ int set_nonblocking(int fd) {
 
 
 int main(int argc, char *argv[]) {
+   
+    _at_kbd_file[0] = '\0';
+    _usb_kbd_file[0] = '\0';
+
+    if (init_dev_file() < 0) {
+        return -1;
+    }
+    //printf("%s\n%s\n", _at_kbd_file, _usb_kbd_file);
+
+    char *kfile = NULL;
+    if (strlen(_at_kbd_file) > 0) {
+        kfile = _at_kbd_file;
+    } else if (strlen(_usb_kbd_file) > 0) {
+        kfile = _usb_kbd_file;
+    }
+
+    if (argc > 1) {
+        kfile = argv[1];
+    }
+
+    if (kfile == NULL) {
+        dprintf(2, "Error: keyboard file not found\n");
+        return -1;
+    }
+
+    int kfd = open(kfile, O_RDONLY);
+    if (kfd < 0) {
+        perror("open");
+        return -1;
+    }
+
+    set_nonblocking(kfd);
+
+    struct input_event kt;
     
-    init_dev_file();
-    printf("%s\n%s\n", _at_kbd_file, _usb_kbd_file);
+    int count = 0;
 
+    while (1) { 
+        count = read(kfd, &kt, sizeof(kt));
 
+        if (count < 0 && errno == EAGAIN) {
+            continue;
+        } else if (count > 0) {
+            if (kt.type == EV_KEY) {
+                if (kt.value == 0 || kt.value == 1) {
+                    printf("key %d %s\n", kt.code, kt.value?"pressed":"released");
+                    if (kt.code == KEY_ESC)
+                        break;
+                } 
+            }
+        } else {
+            perror("read");
+        }
+        //usleep(500000);
+    }
+    
+    close(kfd);
 
 	return 0;
 }
