@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <string.h>
+#include <signal.h>
 
 
 #define DEVS_FILE   "/proc/bus/input/devices"
@@ -20,6 +21,21 @@
 char _dev_struct[DEV_ST_LINE][DEV_LINE_SIZE+1];
 char _at_kbd_file[256];
 char _usb_kbd_file[256];
+int kfd[2] = {-1,-1};
+
+void handle_sig(int sig) {
+    switch(sig) {
+        case SIGINT:
+        case SIGTERM:
+            for(int i=0; i<2; i++) {
+                if (kfd[i] > 0)
+                    close(kfd[i]);
+            }
+            exit(0);
+        default:;
+    }
+
+}
 
 int init_dev_file() {
     int errcode = 0;
@@ -100,8 +116,33 @@ int set_nonblocking(int fd) {
     return old_opt;
 }
 
+void handle_key_evt(int fd) {
+
+    struct input_event kt;
+    int count = 0;
+
+    count = read(fd, &kt, sizeof(kt));
+
+    if (count < 0 && errno == EAGAIN) {
+        return ;
+    } else if (count > 0) {
+        if (kt.type == EV_KEY) {
+            if (kt.value == 0 || kt.value == 1) {
+                printf("key %d %s\n", kt.code, kt.value?"pressed":"released");
+                if (kt.code == KEY_ESC)
+                    kill(getpid(), SIGTERM);
+            } 
+        }
+    } else {
+        perror("read");
+    }
+}
+
 
 int main(int argc, char *argv[]) {
+
+    signal(SIGINT, handle_sig);
+    signal(SIGTERM, handle_sig);
    
     _at_kbd_file[0] = '\0';
     _usb_kbd_file[0] = '\0';
@@ -111,55 +152,50 @@ int main(int argc, char *argv[]) {
     }
     printf("%s\n%s\n", _at_kbd_file, _usb_kbd_file);
 
-    char *kfile = NULL;
+    int kfd_count = 0;
+
     if (strlen(_at_kbd_file) > 0) {
-        kfile = _at_kbd_file;
-    } else if (strlen(_usb_kbd_file) > 0) {
-        kfile = _usb_kbd_file;
-    }
-
-    if (argc > 1) {
-        kfile = argv[1];
-    }
-
-    if (kfile == NULL) {
-        dprintf(2, "Error: keyboard file not found\n");
-        return -1;
-    }
-
-    int kfd = open(kfile, O_RDONLY);
-    if (kfd < 0) {
-        perror("open");
-        return -1;
-    }
-
-    set_nonblocking(kfd);
-
-    struct input_event kt;
-    
-    int count = 0;
-
-    while (1) { 
-        count = read(kfd, &kt, sizeof(kt));
-
-        if (count < 0 && errno == EAGAIN) {
-            continue;
-        } else if (count > 0) {
-            if (kt.type == EV_KEY) {
-                if (kt.value == 0 || kt.value == 1) {
-                    printf("key %d %s\n", kt.code, kt.value?"pressed":"released");
-                    if (kt.code == KEY_ESC)
-                        break;
-                } 
-            }
+        kfd[0] = open(_at_kbd_file, O_RDONLY);
+        if (kfd[0] < 0) {
+            dprintf(2, "%s\n", _at_kbd_file);
         } else {
-            perror("read");
+            kfd_count++;
         }
+    }
+
+    if (strlen(_usb_kbd_file) > 0) {
+        kfd[1] = open(_usb_kbd_file, O_RDONLY);
+        if (kfd[1] < 0) {
+            dprintf(2, "%s\n", _usb_kbd_file);
+            perror("open");
+        }
+        else {
+            kfd_count++;
+        }
+    }
+
+    if (kfd_count <= 0) {
+        dprintf(2, "Error: failed to open input device file\n");
+        return -1;
+    }
+    
+    for(int i=0;i<2;i++) {
+        if (kfd[i] > 0)
+            set_nonblocking(kfd[i]);
+    }
+
+    while (1) {
+        if (kfd[1] > 0) {
+            handle_key_evt(kfd[1]);
+        } 
+
+        if (kfd[0] > 0) {
+            handle_key_evt(kfd[0]);
+        }
+
         //usleep(500000);
     }
     
-    close(kfd);
-
 	return 0;
 }
 
