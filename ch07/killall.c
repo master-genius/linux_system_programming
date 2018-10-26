@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
         pid_t myid = getpid();
         signal(SIGTERM, handle_sig);
         while(1) {
-            printf("child %d say : hello liux.\n", myid);
+            printf("child %d say : hello linux.\n", myid);
             sleep(1);
         }
     }
