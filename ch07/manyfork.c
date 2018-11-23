@@ -35,9 +35,7 @@ int main(int argc, char *argv[]) {
             break;
         }
     }
-    if (process_flag == PCS_UNSET) {
-    
-    } else if (process_flag == PCS_PARENT) {
+    if (process_flag == PCS_PARENT) {
         printf("parent:%d\n", getpid());
         int status = 0;
         for(int i=0;i<child; i++) {

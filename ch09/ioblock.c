@@ -29,7 +29,6 @@ int main(int argc, char *argv[]) {
                 out_flag = 0;
             }
             out_flag += 1;
-        } else if (count == 0) {
         } else if (count > 0) {
             printf("%s\n",buffer);
         }
